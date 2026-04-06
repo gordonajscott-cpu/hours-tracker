@@ -8086,7 +8086,7 @@ export default function WorkHoursTracker({ onImport }) {
           background: "transparent", border: "none", color: "#1a73e8", cursor: "pointer",
           fontFamily: "'Inter', 'Roboto', sans-serif", fontSize: 13, fontWeight: 600, padding: 0,
           textDecoration: "underline"
-        }}>Sync from storage</button>
+        }}>Refresh data</button>
         <span>·</span>
         <button onClick={() => setShowShortcuts(true)} style={{
           background: "transparent", border: "none", color: "#1a73e8", cursor: "pointer",
