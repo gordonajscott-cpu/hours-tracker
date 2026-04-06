@@ -1,9 +1,12 @@
+import { useState } from 'react';
 import { AuthProvider, useAuth } from './lib/AuthContext';
 import WorkHoursTracker from './WorkHoursTracker';
+import ImportData from './ImportData';
 import Login from './Login';
 
 function AppContent() {
   const { user, loading, supabaseConfigured } = useAuth();
+  const [page, setPage] = useState(window.location.hash === '#import' ? 'import' : 'app');
 
   if (loading) {
     return (
@@ -25,7 +28,11 @@ function AppContent() {
     return <Login />;
   }
 
-  return <WorkHoursTracker />;
+  if (page === 'import') {
+    return <ImportData onDone={() => { window.location.hash = ''; setPage('app'); window.location.reload(); }} />;
+  }
+
+  return <WorkHoursTracker onImport={() => { window.location.hash = '#import'; setPage('import'); }} />;
 }
 
 export default function App() {

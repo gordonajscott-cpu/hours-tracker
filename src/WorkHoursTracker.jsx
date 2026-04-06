@@ -1583,7 +1583,7 @@ function NoteAutoComplete({ value, onChange, onSelectEntry, onEnter, noteHistory
 }
 
 // ═══ MAIN APP ═══
-export default function WorkHoursTracker() {
+export default function WorkHoursTracker({ onImport }) {
   const { user } = useAuth();
   const userId = user?.id || 'local';
   const storageAdapter = useMemo(() => getStorage(userId), [userId]);
@@ -8093,6 +8093,16 @@ export default function WorkHoursTracker() {
           fontFamily: "'Inter', 'Roboto', sans-serif", fontSize: 13, fontWeight: 600, padding: 0,
           textDecoration: "underline"
         }}>⌨️ Shortcuts</button>
+        {onImport && (
+          <>
+            <span>·</span>
+            <button onClick={onImport} style={{
+              background: "transparent", border: "none", color: "#1a73e8", cursor: "pointer",
+              fontFamily: "'Inter', 'Roboto', sans-serif", fontSize: 13, fontWeight: 600, padding: 0,
+              textDecoration: "underline"
+            }}>📦 Import Data</button>
+          </>
+        )}
         {supabaseConfigured && (
           <>
             <span>·</span>
