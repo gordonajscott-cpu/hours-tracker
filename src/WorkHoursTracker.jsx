@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect, useCallback, useRef } from "react";
+import React, { useState, useMemo, useEffect, useCallback, useRef } from "react";
 import { useAuth } from "./lib/AuthContext";
 import { getStorage, loadAllData, saveAllData, loadTasks, saveTasks } from "./lib/storage";
 import { supabase, supabaseConfigured } from "./lib/supabase";
