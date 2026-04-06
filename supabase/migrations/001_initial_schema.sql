@@ -1,25 +1,29 @@
 -- Hours Tracker Database Schema
+-- Run this in Supabase Dashboard → SQL Editor → New Query → Run
 
-CREATE TABLE config (
-  user_id UUID REFERENCES auth.users PRIMARY KEY,
+-- Config (one row per user)
+CREATE TABLE public.config (
+  user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE PRIMARY KEY,
   data JSONB NOT NULL DEFAULT '{}',
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
-CREATE TABLE settings (
-  user_id UUID REFERENCES auth.users PRIMARY KEY,
+-- Settings (one row per user)
+CREATE TABLE public.settings (
+  user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE PRIMARY KEY,
   standard_hours DECIMAL DEFAULT 37.5,
   defaults JSONB DEFAULT '{}',
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
-CREATE TABLE time_entries (
+-- Time entries
+CREATE TABLE public.time_entries (
   id TEXT NOT NULL,
-  user_id UUID REFERENCES auth.users NOT NULL,
+  user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL,
   week_key TEXT NOT NULL,
   day_index SMALLINT NOT NULL,
-  start_time TEXT NOT NULL,
-  end_time TEXT NOT NULL,
+  start_time TEXT NOT NULL DEFAULT '',
+  end_time TEXT NOT NULL DEFAULT '',
   note TEXT DEFAULT '',
   customer TEXT DEFAULT '',
   project TEXT DEFAULT '',
@@ -35,9 +39,10 @@ CREATE TABLE time_entries (
   PRIMARY KEY (user_id, id)
 );
 
-CREATE TABLE tasks (
+-- Tasks
+CREATE TABLE public.tasks (
   id TEXT NOT NULL,
-  user_id UUID REFERENCES auth.users NOT NULL,
+  user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL,
   title TEXT NOT NULL,
   importance SMALLINT DEFAULT 3,
   due_date DATE,
@@ -57,8 +62,8 @@ CREATE TABLE tasks (
   blocked_by TEXT,
   effort_minutes INTEGER DEFAULT 0,
   scheduled_date DATE,
-  scheduled_start TEXT,
-  scheduled_end TEXT,
+  scheduled_start TEXT DEFAULT '',
+  scheduled_end TEXT DEFAULT '',
   do_now BOOLEAN DEFAULT FALSE,
   urgent BOOLEAN DEFAULT FALSE,
   completed_date DATE,
@@ -67,8 +72,9 @@ CREATE TABLE tasks (
   PRIMARY KEY (user_id, id)
 );
 
-CREATE TABLE timer_state (
-  user_id UUID REFERENCES auth.users PRIMARY KEY,
+-- Timer state (one row per user)
+CREATE TABLE public.timer_state (
+  user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE PRIMARY KEY,
   status TEXT DEFAULT 'stopped',
   start_time TIMESTAMPTZ,
   start_str TEXT DEFAULT '',
@@ -85,18 +91,28 @@ CREATE TABLE timer_state (
 );
 
 -- Indexes
-CREATE INDEX idx_entries_user_week ON time_entries(user_id, week_key);
-CREATE INDEX idx_tasks_user_status ON tasks(user_id, status);
+CREATE INDEX idx_entries_user_week ON public.time_entries(user_id, week_key);
+CREATE INDEX idx_tasks_user_status ON public.tasks(user_id, status);
 
 -- Row Level Security
-ALTER TABLE config ENABLE ROW LEVEL SECURITY;
-ALTER TABLE settings ENABLE ROW LEVEL SECURITY;
-ALTER TABLE time_entries ENABLE ROW LEVEL SECURITY;
-ALTER TABLE tasks ENABLE ROW LEVEL SECURITY;
-ALTER TABLE timer_state ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.config ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.settings ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.time_entries ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.tasks ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.timer_state ENABLE ROW LEVEL SECURITY;
 
-CREATE POLICY "Users can only access own config" ON config FOR ALL USING (auth.uid() = user_id);
-CREATE POLICY "Users can only access own settings" ON settings FOR ALL USING (auth.uid() = user_id);
-CREATE POLICY "Users can only access own entries" ON time_entries FOR ALL USING (auth.uid() = user_id);
-CREATE POLICY "Users can only access own tasks" ON tasks FOR ALL USING (auth.uid() = user_id);
-CREATE POLICY "Users can only access own timer" ON timer_state FOR ALL USING (auth.uid() = user_id);
+-- Policies: users can only read/write their own data
+CREATE POLICY "Users access own config" ON public.config
+  FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
+
+CREATE POLICY "Users access own settings" ON public.settings
+  FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
+
+CREATE POLICY "Users access own entries" ON public.time_entries
+  FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
+
+CREATE POLICY "Users access own tasks" ON public.tasks
+  FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
+
+CREATE POLICY "Users access own timer" ON public.timer_state
+  FOR ALL USING (auth.uid() = user_id) WITH CHECK (auth.uid() = user_id);
