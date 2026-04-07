@@ -7545,7 +7545,7 @@ export default function WorkHoursTracker({ onImport }) {
               }
             } else {
               for (let i = 5; i >= 0; i--) {
-                let m = reportMonth - i, y = reportMonthYear;
+                let m = reportMonth - i, y = reportYear;
                 while (m < 0) { y--; m += 12; }
                 periods.push(getMonthHours(m, y));
               }
