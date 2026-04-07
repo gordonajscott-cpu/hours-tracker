@@ -46,6 +46,7 @@ CREATE TABLE public.tasks (
   title TEXT NOT NULL,
   importance SMALLINT DEFAULT 3,
   due_date DATE,
+  start_date DATE,
   status TEXT DEFAULT 'not_started',
   project TEXT DEFAULT '',
   customer TEXT DEFAULT '',

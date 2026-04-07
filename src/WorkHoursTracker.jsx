@@ -2642,6 +2642,12 @@ export default function WorkHoursTracker({ onImport }) {
 
   // ═══ TASK FUNCTIONS ═══
   function getUrgency(task) {
+    // If start date is set and hasn't been reached yet, urgency is zero
+    if (task.startDate) {
+      const today = new Date(); today.setHours(0, 0, 0, 0);
+      const start = new Date(task.startDate + "T00:00:00"); start.setHours(0, 0, 0, 0);
+      if (today < start) return { score: 0, label: "Not started", color: "#b0b0b0" };
+    }
     if (task.doNow) return { score: 6, label: "Now", color: "#d93025" };
     if (task.urgent) return { score: 5, label: "Urgent", color: "#c5221f" };
     if (!task.dueDate) return { score: 1, label: "Anytime", color: "#80868b" };
@@ -2746,7 +2752,7 @@ export default function WorkHoursTracker({ onImport }) {
     const ef = entryFields || {};
     const newId = uid();
     setTasks(prev => [...prev, {
-      id: newId, title: title.trim(), importance: 3, dueDate: "", doNow: false, urgent: false,
+      id: newId, title: title.trim(), importance: 3, dueDate: "", startDate: "", doNow: false, urgent: false,
       status: "not_started", project: ef.project || "", customer: ef.customer || "",
       workOrder: ef.workOrder || "", activity: ef.activity || "",
       tags: ef.tags || [], completedDate: "", notes: "", createdDate: dateStr(new Date()),
@@ -6606,6 +6612,11 @@ export default function WorkHoursTracker({ onImport }) {
                       background: task.doNow ? "#d93025" : "transparent", color: task.doNow ? "#fff" : "#80868b",
                       border: `1px solid ${task.doNow ? "#d93025" : "#dadce0"}`
                     }}>🔥 Now</button>
+                    <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                      <span style={{ fontSize: 11, color: "#80868b" }}>Start:</span>
+                      <input type="date" value={task.startDate || ""} onChange={e => updateTask(task.id, { startDate: e.target.value })}
+                        style={{ fontSize: 12, border: "1px solid #dadce0", borderRadius: 6, padding: "2px 6px", outline: "none", color: task.startDate ? "#202124" : "#80868b", background: "#fff", cursor: "pointer" }} />
+                    </div>
                     <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
                       <span style={{ fontSize: 11, color: "#80868b" }}>Due:</span>
                       <input type="date" value={task.dueDate || ""} onChange={e => updateTask(task.id, { dueDate: e.target.value })}
