@@ -1716,6 +1716,7 @@ export default function WorkHoursTracker({ onImport }) {
 
   // Reports state
   const [reportGroup, setReportGroup] = useState("none");
+  const [reportGroupBy, setReportGroupBy] = useState("weekly");
   const [reportFilterField, setReportFilterField] = useState("none");
   const [reportFilterValues, setReportFilterValues] = useState([]);
   const [reportMonth, setReportMonth] = useState(now.getMonth());
