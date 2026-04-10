@@ -4178,28 +4178,28 @@ export default function WorkHoursTracker({ onImport }) {
         <>
           {/* Week & day nav */}
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: isMobile ? 12 : 20, gap: 6 }}>
-            <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+            <div style={{ display: "flex", gap: isMobile ? 3 : 6, alignItems: "center" }}>
               <div style={{ textAlign: "center" }}>
-                <button onClick={() => navWeek(-1)} title="Previous week" style={{ background: "#ffffff", border: "1px solid #dadce0", color: "#202124", padding: "8px 14px", borderRadius: 20, cursor: "pointer", fontSize: 14, fontWeight: 600 }}>««</button>
-                <div style={{ fontSize: 10, color: "#80868b", marginTop: 3 }}>Week</div>
+                <button onClick={() => navWeek(-1)} title="Previous week" style={{ background: "#ffffff", border: "1px solid #dadce0", color: "#202124", padding: isMobile ? "6px 10px" : "8px 14px", borderRadius: 20, cursor: "pointer", fontSize: 14, fontWeight: 600 }}>««</button>
+                {!isMobile && <div style={{ fontSize: 10, color: "#80868b", marginTop: 3 }}>Week</div>}
               </div>
               <div style={{ textAlign: "center" }}>
-                <button onClick={() => navDay(-1)} title="Previous day" style={{ background: "#ffffff", border: "1px solid #dadce0", color: "#202124", padding: "8px 14px", borderRadius: 20, cursor: "pointer", fontSize: 14, fontWeight: 600 }}>«</button>
-                <div style={{ fontSize: 10, color: "#80868b", marginTop: 3 }}>Day</div>
+                <button onClick={() => navDay(-1)} title="Previous day" style={{ background: "#ffffff", border: "1px solid #dadce0", color: "#202124", padding: isMobile ? "6px 10px" : "8px 14px", borderRadius: 20, cursor: "pointer", fontSize: 14, fontWeight: 600 }}>«</button>
+                {!isMobile && <div style={{ fontSize: 10, color: "#80868b", marginTop: 3 }}>Day</div>}
               </div>
             </div>
             <div style={{ textAlign: "center", minWidth: 0, flex: isMobile ? 1 : "unset" }}>
               <div style={{ fontSize: isMobile ? 15 : 18, fontWeight: 600 }}>Week {currentWeek}</div>
               <div style={{ fontSize: isMobile ? 11 : 14, color: "#5f6368", marginTop: 2 }}>{formatDate(weekDates[0])} — {formatDate(weekDates[6])}{!isMobile && ` ${currentYear}`}</div>
             </div>
-            <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+            <div style={{ display: "flex", gap: isMobile ? 3 : 6, alignItems: "center" }}>
               <div style={{ textAlign: "center" }}>
-                <button onClick={() => navDay(1)} title="Next day" style={{ background: "#ffffff", border: "1px solid #dadce0", color: "#202124", padding: "8px 14px", borderRadius: 20, cursor: "pointer", fontSize: 14, fontWeight: 600 }}>»</button>
-                <div style={{ fontSize: 10, color: "#80868b", marginTop: 3 }}>Day</div>
+                <button onClick={() => navDay(1)} title="Next day" style={{ background: "#ffffff", border: "1px solid #dadce0", color: "#202124", padding: isMobile ? "6px 10px" : "8px 14px", borderRadius: 20, cursor: "pointer", fontSize: 14, fontWeight: 600 }}>»</button>
+                {!isMobile && <div style={{ fontSize: 10, color: "#80868b", marginTop: 3 }}>Day</div>}
               </div>
               <div style={{ textAlign: "center" }}>
-                <button onClick={() => navWeek(1)} title="Next week" style={{ background: "#ffffff", border: "1px solid #dadce0", color: "#202124", padding: "8px 14px", borderRadius: 20, cursor: "pointer", fontSize: 14, fontWeight: 600 }}>»»</button>
-                <div style={{ fontSize: 10, color: "#80868b", marginTop: 3 }}>Week</div>
+                <button onClick={() => navWeek(1)} title="Next week" style={{ background: "#ffffff", border: "1px solid #dadce0", color: "#202124", padding: isMobile ? "6px 10px" : "8px 14px", borderRadius: 20, cursor: "pointer", fontSize: 14, fontWeight: 600 }}>»»</button>
+                {!isMobile && <div style={{ fontSize: 10, color: "#80868b", marginTop: 3 }}>Week</div>}
               </div>
             </div>
           </div>
@@ -4250,12 +4250,12 @@ export default function WorkHoursTracker({ onImport }) {
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
                   <div style={{ fontSize: 18, fontWeight: 600, fontFamily: "'Inter', 'Roboto', sans-serif" }}>
-                    {calendarView === "day" ? formatDateLong(weekDates[entryDayIndex]) : `Week ${currentWeek}`}
-                    {calendarView === "day" && isHoliday(weekDates[entryDayIndex]) && (
+                    {(calendarView === "day" || isMobile) ? formatDateLong(weekDates[entryDayIndex]) : `Week ${currentWeek}`}
+                    {(calendarView === "day" || isMobile) && isHoliday(weekDates[entryDayIndex]) && (
                       <span style={{ fontSize: 13, color: "#d93025", fontWeight: 500, marginLeft: 10 }}>🏴 {isHoliday(weekDates[entryDayIndex])}</span>
                     )}
                   </div>
-                  <div style={{ display: "flex", gap: 2, background: "#f1f3f4", borderRadius: 8, padding: 2 }}>
+                  {!isMobile && <div style={{ display: "flex", gap: 2, background: "#f1f3f4", borderRadius: 8, padding: 2 }}>
                     {[["day","Day"],["week","Week"]].map(([k,l]) => (
                       <button key={k} onClick={() => setCalendarView(k)} style={{
                         fontFamily: "'Inter', 'Roboto', sans-serif", fontSize: 12, fontWeight: 600, padding: "4px 12px",
@@ -4265,7 +4265,7 @@ export default function WorkHoursTracker({ onImport }) {
                         boxShadow: calendarView === k ? "0 1px 3px rgba(0,0,0,0.1)" : "none"
                       }}>{l}</button>
                     ))}
-                  </div>
+                  </div>}
                 </div>
                 <div style={{ display: "flex", gap: 8 }}>
                   {copiedEntry && (
@@ -4297,7 +4297,7 @@ export default function WorkHoursTracker({ onImport }) {
                   }}>Cancel</button>
                 </div>
               )}
-              {calendarView === "day" ? (
+              {calendarView === "day" || isMobile ? (
                 <div style={{ position: "relative" }}>
                   <div style={{ height: CAL_VIEW_H, overflow: "hidden", borderRadius: 10 }}>
                     <div style={{ transform: `translateY(${-calScroll * HOUR_H}px)` }}>
@@ -6564,31 +6564,36 @@ export default function WorkHoursTracker({ onImport }) {
                       border: `1px solid ${task.doNow ? "#d93025" : "#dadce0"}`
                     }}>🔥</button>
                     <span style={{ fontSize: 12, fontWeight: 600, padding: "3px 8px", borderRadius: 10, background: urg.color + "18", color: urg.color }}>{urg.label}</span>
-                    <span style={{ display: "inline-flex", gap: 1, flexShrink: 0 }}>
-                      {[1,2,3,4,5].map(v => (
-                        <span key={v} onClick={e => { e.stopPropagation(); updateTask(task.id, { importance: v }); }}
-                          style={{ fontSize: 20, cursor: "pointer", color: v <= (task.importance || 1) ? "#fbbc04" : "#dadce0", lineHeight: 1 }}
-                          onMouseEnter={e => e.currentTarget.style.transform = "scale(1.3)"}
-                          onMouseLeave={e => e.currentTarget.style.transform = "scale(1)"}
-                        >★</span>
-                      ))}
-                    </span>
+                    {isMobile ? (
+                      <span onClick={e => { e.stopPropagation(); updateTask(task.id, { importance: (task.importance || 1) >= 5 ? 1 : (task.importance || 1) + 1 }); }}
+                        style={{ fontSize: 14, fontWeight: 600, color: "#fbbc04", flexShrink: 0, cursor: "pointer" }}>★{task.importance || 1}</span>
+                    ) : (
+                      <span style={{ display: "inline-flex", gap: 1, flexShrink: 0 }}>
+                        {[1,2,3,4,5].map(v => (
+                          <span key={v} onClick={e => { e.stopPropagation(); updateTask(task.id, { importance: v }); }}
+                            style={{ fontSize: 20, cursor: "pointer", color: v <= (task.importance || 1) ? "#fbbc04" : "#dadce0", lineHeight: 1 }}
+                            onMouseEnter={e => e.currentTarget.style.transform = "scale(1.3)"}
+                            onMouseLeave={e => e.currentTarget.style.transform = "scale(1)"}
+                          >★</span>
+                        ))}
+                      </span>
+                    )}
                     {task.duration > 0 && <span style={{ fontSize: 12, color: "#a142f4", fontWeight: 600, flexShrink: 0 }}>⏱ {fmtDuration(task.duration)}</span>}
-                    {task.scheduledStart && <span style={{ fontSize: 12, color: "#137333", fontWeight: 600, flexShrink: 0 }}>📅 {task.scheduledStart}</span>}
+                    {task.scheduledStart && !isMobile && <span style={{ fontSize: 12, color: "#137333", fontWeight: 600, flexShrink: 0 }}>📅 {task.scheduledStart}</span>}
                     {task.recurring && <span style={{ fontSize: 14, color: "#1a73e8", flexShrink: 0 }}>🔄</span>}
-                    {(task.tags || []).length > 0 && <span style={{ fontSize: 12, color: "#24c1e0", fontWeight: 600, flexShrink: 0 }}>🏷{task.tags.length}</span>}
-                    {task.notes && <span style={{ fontSize: 14, color: "#5f6368", flexShrink: 0 }} title={task.notes.substring(0, 100)}>📝</span>}
+                    {(task.tags || []).length > 0 && !isMobile && <span style={{ fontSize: 12, color: "#24c1e0", fontWeight: 600, flexShrink: 0 }}>🏷{task.tags.length}</span>}
+                    {task.notes && !isMobile && <span style={{ fontSize: 14, color: "#5f6368", flexShrink: 0 }} title={task.notes.substring(0, 100)}>📝</span>}
                     {(task.subtasks || []).length > 0 && <span style={{ fontSize: 12, color: (task.subtasks || []).every(s => s.done) ? "#34a853" : "#5f6368", fontWeight: 600, flexShrink: 0 }}>☑{(task.subtasks || []).filter(s => s.done).length}/{(task.subtasks || []).length}</span>}
                     {task.delegatedTo && <span style={{ fontSize: 12, color: "#8b5cf6", flexShrink: 0 }} title={`Delegated to ${task.delegatedTo}`}>👤</span>}
                     {task.blockedBy && tasks.some(t => t.id === task.blockedBy && t.status !== "completed") && <span style={{ fontSize: 12, color: "#d93025", flexShrink: 0 }} title="Blocked">🚫</span>}
-                    {(() => { const age = taskAge(task); return age > 14 ? <span style={{ fontSize: 10, fontWeight: 600, padding: "2px 6px", borderRadius: 8, flexShrink: 0, background: age > 30 ? "#fce8e6" : "#fef7e0", color: age > 30 ? "#d93025" : "#e37400" }}>{age}d</span> : null; })()}
+                    {(() => { const age = taskAge(task); return age > 14 && !isMobile ? <span style={{ fontSize: 10, fontWeight: 600, padding: "2px 6px", borderRadius: 8, flexShrink: 0, background: age > 30 ? "#fce8e6" : "#fef7e0", color: age > 30 ? "#d93025" : "#e37400" }}>{age}d</span> : null; })()}
                     <span style={{
                       fontSize: 13, fontWeight: 700, padding: "3px 10px", borderRadius: 10, flexShrink: 0,
                       background: priority >= 15 ? "#d9302518" : priority >= 8 ? "#e3740018" : "#34a85318",
                       color: priority >= 15 ? "#d93025" : priority >= 8 ? "#e37400" : "#34a853"
                     }}>P:{priority}</span>
                     {/* Missing fields indicator */}
-                    {missing.length > 0 && (
+                    {missing.length > 0 && !isMobile && (
                       <span title={`Missing: ${missing.join(", ")}`} style={{
                         fontSize: 12, fontWeight: 600, padding: "3px 8px", borderRadius: 10, flexShrink: 0,
                         background: missing.length > 3 ? "#fce8e6" : "#fef7e0",
