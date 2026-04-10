@@ -3753,7 +3753,7 @@ export default function WorkHoursTracker({ onImport }) {
   );
 
   return (
-    <div style={{ fontFamily: "'Inter', 'Roboto', 'Segoe UI', sans-serif", minHeight: "100vh", background: darkMode ? "#1a1a2e" : "#f1f3f4", color: darkMode ? "#e0e0e0" : "#202124", padding: isMobile ? "12px 12px 60px" : "28px 28px 28px", boxSizing: "border-box", transition: "background 0.3s, color 0.3s" }}>
+    <div style={{ fontFamily: "'Inter', 'Roboto', 'Segoe UI', sans-serif", minHeight: "100vh", maxWidth: "100vw", overflowX: "hidden", background: darkMode ? "#1a1a2e" : "#f1f3f4", color: darkMode ? "#e0e0e0" : "#202124", padding: isMobile ? "10px 10px 60px" : "28px 28px 28px", boxSizing: "border-box", transition: "background 0.3s, color 0.3s" }}>
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Roboto:wght@400;500;700&display=swap');
         * { box-sizing: border-box; }
@@ -3762,10 +3762,10 @@ export default function WorkHoursTracker({ onImport }) {
         ::-webkit-scrollbar { width: 6px; } ::-webkit-scrollbar-track { background: transparent; } ::-webkit-scrollbar-thumb { background: #bdc1c6; border-radius: 3px; }
         @keyframes timer-breathe { 0%, 100% { opacity: 0.08; } 50% { opacity: 0.18; } }
         @media (max-width: 768px) {
-          .wht-grid-2col { grid-template-columns: 1fr !important; }
-          .wht-grid-5col { grid-template-columns: repeat(2, 1fr) !important; }
-          .wht-grid-3col { grid-template-columns: 1fr !important; }
-          .wht-grid-4col { grid-template-columns: repeat(2, 1fr) !important; }
+          .wht-grid-2col { grid-template-columns: minmax(0, 1fr) !important; }
+          .wht-grid-5col { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
+          .wht-grid-3col { grid-template-columns: minmax(0, 1fr) !important; }
+          .wht-grid-4col { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
           .wht-hide-mobile { display: none !important; }
           .wht-stack-mobile { flex-direction: column !important; align-items: stretch !important; }
           .wht-full-mobile { width: 100% !important; }
@@ -3777,6 +3777,10 @@ export default function WorkHoursTracker({ onImport }) {
             font-size: 16px !important; /* prevent iOS zoom on focus */
           }
           .wht-small-touch { min-height: 40px; }
+          /* Safety: any direct child of the app root must not exceed viewport width */
+          img, video, iframe, table, pre { max-width: 100%; }
+          /* Prevent long unbreakable strings (URLs, tokens) from pushing layout wide */
+          h1, h2, h3, h4, p { overflow-wrap: anywhere; }
         }
         /* Larger touch targets on touch devices */
         @media (hover: none) and (pointer: coarse) {
@@ -4788,23 +4792,24 @@ export default function WorkHoursTracker({ onImport }) {
           </div>
 
           {/* Week summary strip */}
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 4, marginBottom: 18 }}>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(7, minmax(0, 1fr))", gap: isMobile ? 2 : 4, marginBottom: 18 }}>
             {DAYS.map((_, i) => {
               const hol = isHoliday(weekDates[i]);
               return (
               <div key={i} onClick={() => { setEntryDayIndex(i); setSelectedEntryId(null); }} title={hol || ""} style={{
-                textAlign: "center", padding: "10px 4px",
+                textAlign: "center", padding: isMobile ? "6px 2px" : "10px 4px",
+                minWidth: 0, overflow: "hidden",
                 background: hol ? "#fce8e6" : entryDayIndex === i ? "#e8f0fe" : "#ffffff",
                 border: `1px solid ${hol ? "#f28b82" : entryDayIndex === i ? "#1a73e8" : "#dadce0"}`,
-                borderRadius: 20, cursor: "pointer"
+                borderRadius: isMobile ? 10 : 20, cursor: "pointer"
               }}>
-                <div style={{ fontSize: 13, color: hol ? "#d93025" : entryDayIndex === i ? "#1a73e8" : "#80868b", marginBottom: 4 }}>
-                  {SHORT_DAYS[i]} {hol ? "🏴" : ""}
+                <div style={{ fontSize: isMobile ? 11 : 13, color: hol ? "#d93025" : entryDayIndex === i ? "#1a73e8" : "#80868b", marginBottom: isMobile ? 2 : 4 }}>
+                  {SHORT_DAYS[i]}{!isMobile && " "}{hol ? "🏴" : ""}
                 </div>
-                <div style={{ fontSize: 16, fontWeight: 700, fontFamily: "'Inter', 'Roboto', sans-serif", color: dailyHours[i] > 0 ? "#202124" : "#dadce0" }}>
+                <div style={{ fontSize: isMobile ? 13 : 16, fontWeight: 700, fontFamily: "'Inter', 'Roboto', sans-serif", color: dailyHours[i] > 0 ? "#202124" : "#dadce0" }}>
                   {dailyHours[i] > 0 ? fmtH(dailyHours[i]) : "—"}
                 </div>
-                <div style={{ fontSize: 12, color: "#5f6368", marginTop: 2 }}>{(weekData[i] || []).length} block{(weekData[i] || []).length !== 1 ? "s" : ""}</div>
+                {!isMobile && <div style={{ fontSize: 12, color: "#5f6368", marginTop: 2 }}>{(weekData[i] || []).length} block{(weekData[i] || []).length !== 1 ? "s" : ""}</div>}
               </div>
               );
             })}
