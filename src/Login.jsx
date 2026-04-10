@@ -36,10 +36,11 @@ export default function Login() {
       minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center',
       background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
       fontFamily: "'Inter', 'Roboto', -apple-system, sans-serif",
+      padding: '16px',
     }}>
       <div style={{
-        background: '#fff', borderRadius: 16, padding: '40px 36px', width: 380,
-        boxShadow: '0 20px 60px rgba(0,0,0,0.3)',
+        background: '#fff', borderRadius: 16, padding: '32px 24px', width: '100%', maxWidth: 380,
+        boxShadow: '0 20px 60px rgba(0,0,0,0.3)', boxSizing: 'border-box',
       }}>
         <div style={{ textAlign: 'center', marginBottom: 28 }}>
           <div style={{ fontSize: 36, marginBottom: 8 }}>⏱️</div>
@@ -55,8 +56,8 @@ export default function Login() {
             <input
               type="email" value={email} onChange={e => setEmail(e.target.value)} required
               style={{
-                width: '100%', padding: '10px 12px', border: '1px solid #dadce0', borderRadius: 8,
-                fontSize: 14, outline: 'none', boxSizing: 'border-box',
+                width: '100%', padding: '12px 14px', border: '1px solid #dadce0', borderRadius: 8,
+                fontSize: 16, outline: 'none', boxSizing: 'border-box',
               }}
               onFocus={e => e.target.style.borderColor = '#1a73e8'}
               onBlur={e => e.target.style.borderColor = '#dadce0'}
@@ -68,8 +69,8 @@ export default function Login() {
               type="password" value={password} onChange={e => setPassword(e.target.value)} required
               minLength={6}
               style={{
-                width: '100%', padding: '10px 12px', border: '1px solid #dadce0', borderRadius: 8,
-                fontSize: 14, outline: 'none', boxSizing: 'border-box',
+                width: '100%', padding: '12px 14px', border: '1px solid #dadce0', borderRadius: 8,
+                fontSize: 16, outline: 'none', boxSizing: 'border-box',
               }}
               onFocus={e => e.target.style.borderColor = '#1a73e8'}
               onBlur={e => e.target.style.borderColor = '#dadce0'}

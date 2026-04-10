@@ -135,8 +135,8 @@ export default function ImportData({ onDone }) {
   }
 
   const cardStyle = {
-    background: '#fff', borderRadius: 16, padding: '32px 36px', maxWidth: 560,
-    width: '100%', boxShadow: '0 8px 32px rgba(0,0,0,0.12)',
+    background: '#fff', borderRadius: 16, padding: '28px 20px', maxWidth: 560,
+    width: '100%', boxShadow: '0 8px 32px rgba(0,0,0,0.12)', boxSizing: 'border-box',
   };
 
   const btnPrimary = {

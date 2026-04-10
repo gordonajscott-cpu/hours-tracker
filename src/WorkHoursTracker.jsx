@@ -1639,6 +1639,13 @@ export default function WorkHoursTracker({ onImport }) {
   const [batchSelected, setBatchSelected] = useState(new Set());
   const [batchAction, setBatchAction] = useState(null);
   const [darkMode, setDarkMode] = useState(false);
+  const [isMobile, setIsMobile] = useState(() => typeof window !== "undefined" && window.innerWidth < 768);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  useEffect(() => {
+    const onResize = () => setIsMobile(window.innerWidth < 768);
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, []);
   const [taskDragId, setTaskDragId] = useState(null); // none, project, customer
   const [confirmDeleteId, setConfirmDeleteId] = useState(null);
   const [editingTaskId, setEditingTaskId_raw] = useState(null);
@@ -3734,7 +3741,7 @@ export default function WorkHoursTracker({ onImport }) {
   );
 
   return (
-    <div style={{ fontFamily: "'Inter', 'Roboto', 'Segoe UI', sans-serif", minHeight: "100vh", background: darkMode ? "#1a1a2e" : "#f1f3f4", color: darkMode ? "#e0e0e0" : "#202124", padding: "28px 28px 28px", boxSizing: "border-box", transition: "background 0.3s, color 0.3s" }}>
+    <div style={{ fontFamily: "'Inter', 'Roboto', 'Segoe UI', sans-serif", minHeight: "100vh", background: darkMode ? "#1a1a2e" : "#f1f3f4", color: darkMode ? "#e0e0e0" : "#202124", padding: isMobile ? "12px 12px 60px" : "28px 28px 28px", boxSizing: "border-box", transition: "background 0.3s, color 0.3s" }}>
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Roboto:wght@400;500;700&display=swap');
         * { box-sizing: border-box; }
@@ -3745,31 +3752,49 @@ export default function WorkHoursTracker({ onImport }) {
         @media (max-width: 768px) {
           .wht-grid-2col { grid-template-columns: 1fr !important; }
           .wht-grid-5col { grid-template-columns: repeat(2, 1fr) !important; }
+          .wht-grid-3col { grid-template-columns: 1fr !important; }
+          .wht-grid-4col { grid-template-columns: repeat(2, 1fr) !important; }
           .wht-hide-mobile { display: none !important; }
+          .wht-stack-mobile { flex-direction: column !important; align-items: stretch !important; }
+          .wht-full-mobile { width: 100% !important; }
+          .wht-scroll-x { overflow-x: auto !important; -webkit-overflow-scrolling: touch; }
+          .wht-scroll-x::-webkit-scrollbar { height: 4px; }
+          input[type="text"], input[type="email"], input[type="password"],
+          input[type="number"], input[type="search"], input[type="date"],
+          input[type="time"], textarea {
+            font-size: 16px !important; /* prevent iOS zoom on focus */
+          }
+          .wht-small-touch { min-height: 40px; }
+        }
+        /* Larger touch targets on touch devices */
+        @media (hover: none) and (pointer: coarse) {
+          button { min-height: 36px; }
         }
       `}</style>
 
       {/* HEADER */}
-      <div style={{ marginBottom: 28 }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 6 }}>
-          <div style={{ width: 40, height: 40, borderRadius: 12, background: "#1a73e8", display: "flex", alignItems: "center", justifyContent: "center" }}>
-            <span style={{ color: "#fff", fontSize: 18, fontWeight: 700 }}>H</span>
+      <div style={{ marginBottom: isMobile ? 16 : 28 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: isMobile ? 8 : 12, marginBottom: 6, flexWrap: "wrap" }}>
+          <div style={{ width: isMobile ? 32 : 40, height: isMobile ? 32 : 40, borderRadius: 12, background: "#1a73e8", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+            <span style={{ color: "#fff", fontSize: isMobile ? 15 : 18, fontWeight: 700 }}>H</span>
           </div>
-          <div>
-            <h1 style={{ fontFamily: "'Inter', 'Roboto', sans-serif", fontSize: 22, fontWeight: 600, margin: 0, color: darkMode ? "#e0e0e0" : "#202124" }}>Hours Tracker <span style={{ fontSize: 11, fontWeight: 500, color: "#1a73e8", background: "#e8f0fe", padding: "2px 8px", borderRadius: 8, verticalAlign: "middle" }}>V-Active</span></h1>
+          <div style={{ minWidth: 0, flex: isMobile ? 1 : "unset" }}>
+            <h1 style={{ fontFamily: "'Inter', 'Roboto', sans-serif", fontSize: isMobile ? 17 : 22, fontWeight: 600, margin: 0, color: darkMode ? "#e0e0e0" : "#202124", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>Hours Tracker{!isMobile && <span style={{ fontSize: 11, fontWeight: 500, color: "#1a73e8", background: "#e8f0fe", padding: "2px 8px", borderRadius: 8, verticalAlign: "middle", marginLeft: 8 }}>V-Active</span>}</h1>
           </div>
-          {saveStatus && <span style={{ marginLeft: "auto", fontSize: 13, color: saveStatus === "error" || saveStatus.includes("error") ? "#d93025" : "#34a853", fontWeight: 500 }}>
-            {saveStatus === "saved" ? "✓ Saved" : saveStatus === "refreshing..." ? "↻ Refreshing..." : saveStatus === "refreshed" ? "✓ Refreshed" : saveStatus === "imported" ? "✓ Imported" : saveStatus === "copied" ? "✓ Copied" : saveStatus.includes("error") ? "⚠ " + saveStatus : "✓ " + saveStatus}
+          {saveStatus && <span style={{ marginLeft: isMobile ? 0 : "auto", fontSize: isMobile ? 11 : 13, color: saveStatus === "error" || saveStatus.includes("error") ? "#d93025" : "#34a853", fontWeight: 500 }}>
+            {saveStatus === "saved" ? "✓ Saved" : saveStatus === "refreshing..." ? "↻" : saveStatus === "refreshed" ? "✓" : saveStatus === "imported" ? "✓ Imported" : saveStatus === "copied" ? "✓ Copied" : saveStatus.includes("error") ? "⚠" : "✓"}
           </span>}
-          {!saveStatus && lastSaved && (
+          {!saveStatus && lastSaved && !isMobile && (
             <span style={{ marginLeft: "auto", fontSize: 12, color: "#80868b" }}>
               Last saved {lastSaved.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}
             </span>
           )}
           <button onClick={refreshFromStorage} title="Refresh from storage — pull latest data from other devices" style={{
-            background: "transparent", border: "1px solid #dadce0", color: "#5f6368", padding: "6px 10px",
+            background: "transparent", border: "1px solid #dadce0", color: "#5f6368",
+            padding: isMobile ? "6px 8px" : "6px 10px",
             borderRadius: 8, cursor: "pointer", fontSize: 14, display: "flex", alignItems: "center", gap: 4,
-            marginLeft: saveStatus || lastSaved ? 8 : "auto"
+            marginLeft: isMobile ? "auto" : (saveStatus || lastSaved ? 8 : "auto"),
+            flexShrink: 0,
           }}
             onMouseEnter={e => { e.currentTarget.style.background = "#f1f3f4"; }}
             onMouseLeave={e => { e.currentTarget.style.background = "transparent"; }}
@@ -3777,14 +3802,15 @@ export default function WorkHoursTracker({ onImport }) {
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
               <path d="M21 2v6h-6" /><path d="M3 12a9 9 0 0 1 15-6.7L21 8" /><path d="M3 22v-6h6" /><path d="M21 12a9 9 0 0 1-15 6.7L3 16" />
             </svg>
-            <span style={{ fontSize: 12, fontWeight: 600 }}>Sync</span>
+            {!isMobile && <span style={{ fontSize: 12, fontWeight: 600 }}>Sync</span>}
           </button>
           <button onClick={() => setDarkMode(d => !d)} title={darkMode ? "Light mode" : "Dark mode"} style={{
-            background: "transparent", border: "1px solid #dadce0", color: "#5f6368", padding: "6px 10px",
-            borderRadius: 8, cursor: "pointer", fontSize: 14
+            background: "transparent", border: "1px solid #dadce0", color: "#5f6368",
+            padding: isMobile ? "6px 8px" : "6px 10px",
+            borderRadius: 8, cursor: "pointer", fontSize: 14, flexShrink: 0,
           }}>{darkMode ? "☀️" : "🌙"}</button>
         </div>
-        <p style={{ color: "#5f6368", fontSize: 14, margin: 0, marginLeft: 52 }}>Contracted: {standardHours}h/week · Track your work hours, overtime, and projects</p>
+        {!isMobile && <p style={{ color: "#5f6368", fontSize: 14, margin: 0, marginLeft: 52 }}>Contracted: {standardHours}h/week · Track your work hours, overtime, and projects</p>}
       </div>
 
       {/* ═══ DAILY QUOTE ═══ */}
@@ -3820,28 +3846,33 @@ export default function WorkHoursTracker({ onImport }) {
       {/* ═══ TIMER ═══ */}
       {timerStatus === "stopped" ? (
         <div style={{
-          display: "flex", alignItems: "center", gap: 14, marginBottom: 24,
-          padding: "14px 18px", background: "#ffffff", borderRadius: 10, border: "1px solid #dadce0"
+          display: "flex", alignItems: "center", gap: 14, marginBottom: isMobile ? 16 : 24,
+          padding: isMobile ? "10px 12px" : "14px 18px", background: "#ffffff", borderRadius: 10, border: "1px solid #dadce0"
         }}>
-          <div style={{ fontSize: 14, color: "#5f6368" }}>Timer</div>
+          {!isMobile && <div style={{ fontSize: 14, color: "#5f6368" }}>Timer</div>}
           <button onClick={startTimer} style={{
-            background: "#1a73e8", border: "none", color: "#fff", padding: "10px 24px",
+            background: "#1a73e8", border: "none", color: "#fff",
+            padding: isMobile ? "10px 16px" : "10px 24px",
             borderRadius: 20, cursor: "pointer", fontFamily: "'Inter', 'Roboto', sans-serif",
-            fontSize: 14, fontWeight: 700, display: "flex", alignItems: "center", gap: 8
+            fontSize: 14, fontWeight: 700, display: "flex", alignItems: "center", gap: 8,
+            flex: isMobile ? 1 : "unset", justifyContent: "center",
           }}>
             ▶ Start Timer
           </button>
-          <div style={{ fontSize: 14, color: "#5f6368" }}>Track work in real-time</div>
+          {!isMobile && <div style={{ fontSize: 14, color: "#5f6368" }}>Track work in real-time</div>}
         </div>
       ) : (
         <div style={{
-          marginBottom: 24, borderRadius: 12, overflow: "visible",
+          marginBottom: isMobile ? 16 : 24, borderRadius: 12, overflow: "visible",
           border: `2px solid ${timerStatus === "running" ? "#1a73e8" : "#1a73e8"}`,
           background: "#ffffff"
         }}>
           {/* Timer header with clock */}
           <div style={{
-            display: "flex", alignItems: "center", gap: 18, padding: "16px 20px",
+            display: "flex", alignItems: "center",
+            gap: isMobile ? 10 : 18,
+            padding: isMobile ? "12px 12px" : "16px 20px",
+            flexWrap: isMobile ? "wrap" : "nowrap",
             background: timerStatus === "running" ? "rgba(16, 185, 129, 0.08)" : "rgba(26, 115, 232, 0.08)"
           }}>
             {/* Pulsing dot */}
@@ -3856,12 +3887,12 @@ export default function WorkHoursTracker({ onImport }) {
             {/* Clock display */}
             <div>
               <div style={{
-                fontSize: 36, fontWeight: 700, fontFamily: "'Inter', 'Roboto', sans-serif",
-                color: "#1a73e8", letterSpacing: "2px", fontVariantNumeric: "tabular-nums"
+                fontSize: isMobile ? 28 : 36, fontWeight: 700, fontFamily: "'Inter', 'Roboto', sans-serif",
+                color: "#1a73e8", letterSpacing: isMobile ? "1px" : "2px", fontVariantNumeric: "tabular-nums"
               }}>
                 {formatTimerDisplay(timerElapsed)}
               </div>
-              <div style={{ display: "flex", gap: 14, fontSize: 14, color: "#5f6368", marginTop: 4 }}>
+              <div style={{ display: "flex", gap: isMobile ? 8 : 14, fontSize: isMobile ? 12 : 14, color: "#5f6368", marginTop: 4, flexWrap: "wrap" }}>
                 <span>Started {timerStartStr}</span>
                 {timerTotalPaused > 0 || timerPauseStart ? <span>· {formatTimerPaused()}</span> : null}
                 {timerStatus === "paused" && <span style={{ color: "#1a73e8", fontWeight: 600 }}>PAUSED</span>}
@@ -3871,7 +3902,7 @@ export default function WorkHoursTracker({ onImport }) {
             <div style={{ flex: 1 }} />
 
             {/* Control buttons */}
-            <div style={{ display: "flex", gap: 8 }}>
+            <div style={{ display: "flex", gap: isMobile ? 6 : 8, width: isMobile ? "100%" : "auto", justifyContent: isMobile ? "flex-end" : "flex-start" }}>
               {timerStatus === "running" && (
                 <button onClick={pauseTimer} style={{
                   background: "#1a73e8", border: "none", color: "#ffffff", padding: "10px 20px",
@@ -3928,8 +3959,8 @@ export default function WorkHoursTracker({ onImport }) {
 
           {/* Tag fields */}
           <div style={{
-            display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10,
-            padding: "14px 20px", borderTop: "1px solid #dadce0"
+            display: "grid", gridTemplateColumns: isMobile ? "1fr 1fr" : "1fr 1fr 1fr", gap: 10,
+            padding: isMobile ? "12px 12px" : "14px 20px", borderTop: "1px solid #dadce0"
           }}>
             <div>
               <div style={{ fontSize: 13, color: "#5f6368", textTransform: "uppercase", letterSpacing: "1px", marginBottom: 5 }}>Work Order</div>
@@ -3963,18 +3994,37 @@ export default function WorkHoursTracker({ onImport }) {
       )}
 
       {/* TABS */}
-      <div style={{ display: "flex", gap: 0, marginBottom: 28, borderBottom: "1px solid #dadce0" }}>
-        {["dashboard", "week", "tasks", "reports", "admin"].map(tab => (
+      <div className="wht-scroll-x" style={{
+        display: "flex", gap: 0, marginBottom: isMobile ? 18 : 28,
+        borderBottom: "1px solid #dadce0",
+        overflowX: isMobile ? "auto" : "visible",
+        scrollbarWidth: "none",
+        msOverflowStyle: "none",
+      }}>
+        {[
+          ["dashboard", "📊", "Dashboard"],
+          ["week", "📅", "Week"],
+          ["tasks", "✓", "Tasks"],
+          ["reports", "📈", "Reports"],
+          ["admin", "⚙", "Admin"],
+        ].map(([tab, icon, label]) => (
           <button key={tab} onClick={() => setActiveTab(tab)} style={{
-            fontFamily: "'Inter', 'Roboto', sans-serif", fontSize: 14, fontWeight: 500,
-            textTransform: "capitalize", letterSpacing: "0.25px", padding: "12px 24px",
+            fontFamily: "'Inter', 'Roboto', sans-serif", fontSize: isMobile ? 13 : 14, fontWeight: 500,
+            textTransform: "capitalize", letterSpacing: "0.25px",
+            padding: isMobile ? "10px 12px" : "12px 24px",
             background: "transparent",
             color: activeTab === tab ? "#1a73e8" : "#5f6368",
             border: "none",
             borderBottom: activeTab === tab ? "3px solid #1a73e8" : "3px solid transparent",
             cursor: "pointer",
-            transition: "all 0.2s"
-          }}>{tab}</button>
+            transition: "all 0.2s",
+            flex: isMobile ? "1 0 auto" : "0 0 auto",
+            whiteSpace: "nowrap",
+            display: "flex", alignItems: "center", gap: 6, justifyContent: "center",
+          }}>
+            <span style={{ fontSize: isMobile ? 16 : 14 }}>{icon}</span>
+            <span>{label}</span>
+          </button>
         ))}
       </div>
 
@@ -4127,7 +4177,7 @@ export default function WorkHoursTracker({ onImport }) {
       {activeTab === "week" && (
         <>
           {/* Week & day nav */}
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20 }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: isMobile ? 12 : 20, gap: 6 }}>
             <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
               <div style={{ textAlign: "center" }}>
                 <button onClick={() => navWeek(-1)} title="Previous week" style={{ background: "#ffffff", border: "1px solid #dadce0", color: "#202124", padding: "8px 14px", borderRadius: 20, cursor: "pointer", fontSize: 14, fontWeight: 600 }}>««</button>
@@ -4138,9 +4188,9 @@ export default function WorkHoursTracker({ onImport }) {
                 <div style={{ fontSize: 10, color: "#80868b", marginTop: 3 }}>Day</div>
               </div>
             </div>
-            <div style={{ textAlign: "center" }}>
-              <div style={{ fontSize: 18, fontWeight: 600 }}>Week {currentWeek}</div>
-              <div style={{ fontSize: 14, color: "#5f6368", marginTop: 2 }}>{formatDate(weekDates[0])} — {formatDate(weekDates[6])} {currentYear}</div>
+            <div style={{ textAlign: "center", minWidth: 0, flex: isMobile ? 1 : "unset" }}>
+              <div style={{ fontSize: isMobile ? 15 : 18, fontWeight: 600 }}>Week {currentWeek}</div>
+              <div style={{ fontSize: isMobile ? 11 : 14, color: "#5f6368", marginTop: 2 }}>{formatDate(weekDates[0])} — {formatDate(weekDates[6])}{!isMobile && ` ${currentYear}`}</div>
             </div>
             <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
               <div style={{ textAlign: "center" }}>
@@ -4194,7 +4244,7 @@ export default function WorkHoursTracker({ onImport }) {
           </div>
 
           {/* Calendar + Side panel */}
-          <div style={{ display: "grid", gridTemplateColumns: calendarView === "week" ? "1fr 280px" : "1fr 300px", gap: 20, marginBottom: 24 }}>
+          <div style={{ display: "grid", gridTemplateColumns: isMobile ? "1fr" : (calendarView === "week" ? "1fr 280px" : "1fr 300px"), gap: isMobile ? 12 : 20, marginBottom: 24 }}>
             {/* Calendar */}
             <div>
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
@@ -4756,7 +4806,7 @@ export default function WorkHoursTracker({ onImport }) {
             const weekContracted = stdHrs - (holCount * dailyHrs);
             const weekOT = weeklyTotal - weekContracted;
             return (
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12 }}>
+            <div className="wht-grid-3col" style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12 }}>
               <div style={{ background: "#ffffff", border: "1px solid #dadce0", borderRadius: 12, padding: "16px 20px", textAlign: "center", boxShadow: "0 1px 3px rgba(0,0,0,0.08)" }}>
                 <div style={{ fontSize: 13, color: "#5f6368", textTransform: "uppercase", letterSpacing: "1px", marginBottom: 6 }}>Weekly Total</div>
                 <div style={{ fontSize: 28, fontWeight: 700, fontFamily: "'Inter', 'Roboto', sans-serif" }}>{fmtH(weeklyTotal)}</div>
@@ -4782,8 +4832,8 @@ export default function WorkHoursTracker({ onImport }) {
       {activeTab === "tasks" && (
         <div>
           {/* View toggle */}
-          <div style={{ display: "flex", gap: 12, marginBottom: 16, alignItems: "center" }}>
-            <div style={{ display: "flex", gap: 3, background: "#f1f3f4", borderRadius: 10, padding: 3 }}>
+          <div className="wht-scroll-x" style={{ display: "flex", gap: 12, marginBottom: 16, alignItems: "center", overflowX: isMobile ? "auto" : "visible", flexWrap: isMobile ? "nowrap" : "wrap" }}>
+            <div className="wht-scroll-x" style={{ display: "flex", gap: 3, background: "#f1f3f4", borderRadius: 10, padding: 3, overflowX: isMobile ? "auto" : "visible", flexShrink: 0 }}>
               {[["list", "📋 List"], ["kanban", "🗂 Kanban"], ["myday", "☀️ My Day"], ["schedule", "🗓 Schedule"], ["planning", "📆 Plan Week"], ["taskreports", "📊 Reports"]].map(([k, l]) => (
                 <button key={k} onClick={() => { setTaskView(k); setReviewMode(false); }} style={{
                   fontFamily: "'Inter', 'Roboto', sans-serif", fontSize: 13, fontWeight: 600, padding: "8px 20px",
@@ -5210,7 +5260,7 @@ export default function WorkHoursTracker({ onImport }) {
             return (
               <div>
                 <div style={{ fontSize: 16, fontWeight: 700, color: "#202124", marginBottom: 12 }}>📆 Week Plan — W{currentWeek} {currentYear}</div>
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr) 200px", gap: 10, alignItems: "start" }}>
+                <div className="wht-grid-3col" style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr) 200px", gap: 10, alignItems: "start" }}>
                   {days.map((day, i) => (
                     <div key={i}
                       onDragOver={e => { e.preventDefault(); e.currentTarget.style.background = "#e8f0fe"; }}
@@ -5269,7 +5319,7 @@ export default function WorkHoursTracker({ onImport }) {
                 <div style={{ fontSize: 16, fontWeight: 700, color: "#202124", marginBottom: 12 }}>
                   🗓 Schedule Tasks — {n.toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long" })}
                 </div>
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 380px", gap: 16, alignItems: "start" }}>
+                <div className="wht-grid-2col" style={{ display: "grid", gridTemplateColumns: "1fr 380px", gap: 16, alignItems: "start" }}>
                   {/* Left: Full scrollable calendar */}
                   <div style={{ position: "relative" }}>
                     <div style={{ height: CAL_VIEW_H, overflow: "hidden", borderRadius: 12, border: "1px solid #e8eaed", background: "#fff",
@@ -5596,7 +5646,7 @@ export default function WorkHoursTracker({ onImport }) {
               <div>
                 {/* Capacity cards */}
                 <div style={{ fontSize: 16, fontWeight: 700, color: "#202124", marginBottom: 12 }}>📊 Task Capacity</div>
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 12, marginBottom: 24 }}>
+                <div className="wht-grid-4col" style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 12, marginBottom: 24 }}>
                   <CapacityCard label="Today" period={m.today} />
                   <CapacityCard label="This Week" period={m.week} />
                   <CapacityCard label="This Month" period={m.month} />
@@ -5605,7 +5655,7 @@ export default function WorkHoursTracker({ onImport }) {
 
                 {/* Overview stats */}
                 <div style={{ fontSize: 16, fontWeight: 700, color: "#202124", marginBottom: 12 }}>📋 Overview</div>
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 12, marginBottom: 24 }}>
+                <div className="wht-grid-4col" style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 12, marginBottom: 24 }}>
                   {[
                     { label: "Active Tasks", value: m.total, color: "#1a73e8" },
                     { label: "Overdue", value: m.overdue, color: m.overdue > 0 ? "#d93025" : "#34a853" },
@@ -5620,7 +5670,7 @@ export default function WorkHoursTracker({ onImport }) {
                 </div>
 
                 {/* Velocity */}
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 12, marginBottom: 24 }}>
+                <div className="wht-grid-4col" style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 12, marginBottom: 24 }}>
                   {[
                     { label: "Completed This Week", value: m.completedThisWeek, color: "#34a853" },
                     { label: "Completed This Month", value: m.completedThisMonth, color: "#34a853" },
@@ -5635,7 +5685,7 @@ export default function WorkHoursTracker({ onImport }) {
                 </div>
 
                 {/* Status breakdown */}
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 24 }}>
+                <div className="wht-grid-2col" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 24 }}>
                   <div style={{ background: "#fff", border: "1px solid #e8eaed", borderRadius: 12, padding: "16px 20px", boxShadow: "0 1px 3px rgba(0,0,0,0.06)" }}>
                     <div style={{ fontSize: 14, fontWeight: 700, color: "#202124", marginBottom: 12 }}>By Status</div>
                     {Object.entries(m.byStatus).map(([k, v]) => (
@@ -5771,7 +5821,7 @@ export default function WorkHoursTracker({ onImport }) {
 
                     return (
                       <div>
-                        <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 12, marginBottom: 20 }}>
+                        <div className="wht-grid-4col" style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 12, marginBottom: 20 }}>
                           {[
                             { label: "Completed", value: completedInPeriod.length, color: "#34a853", icon: "✓" },
                             { label: "Created", value: createdInPeriod.length, color: "#1a73e8", icon: "+" },
@@ -5785,7 +5835,7 @@ export default function WorkHoursTracker({ onImport }) {
                           ))}
                         </div>
 
-                        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 20 }}>
+                        <div className="wht-grid-2col" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 20 }}>
                           <div style={{ background: "#fff", border: "1px solid #e8eaed", borderRadius: 12, padding: "14px 16px", textAlign: "center" }}>
                             <div style={{ fontSize: 24, fontWeight: 700, color: "#1a73e8" }}>{fmtH(totalTrackedHrs)}</div>
                             <div style={{ fontSize: 12, color: "#5f6368", marginTop: 4 }}>Hours Tracked on Tasks</div>
@@ -7290,7 +7340,7 @@ export default function WorkHoursTracker({ onImport }) {
                         </div>
                       ))}
                     </div>
-                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12 }}>
+                    <div className="wht-grid-3col" style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12 }}>
                       <div style={{ background: "#ffffff", border: "1px solid #dadce0", borderRadius: 12, padding: "16px 20px", textAlign: "center", boxShadow: "0 1px 3px rgba(0,0,0,0.08)" }}>
                         <div style={{ fontSize: 13, color: "#5f6368", textTransform: "uppercase", letterSpacing: "1px", marginBottom: 6 }}>Total</div>
                         <div style={{ fontSize: 28, fontWeight: 700, fontFamily: "'Inter', 'Roboto', sans-serif" }}>{fmtH(total)}</div>
@@ -7332,7 +7382,7 @@ export default function WorkHoursTracker({ onImport }) {
                         </div>
                       ))}
                     </div>
-                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12 }}>
+                    <div className="wht-grid-3col" style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12 }}>
                       <div style={{ background: "#ffffff", border: "1px solid #dadce0", borderRadius: 12, padding: "16px 20px", textAlign: "center", boxShadow: "0 1px 3px rgba(0,0,0,0.08)" }}>
                         <div style={{ fontSize: 13, color: "#5f6368", textTransform: "uppercase", letterSpacing: "1px", marginBottom: 6 }}>Total</div>
                         <div style={{ fontSize: 28, fontWeight: 700, fontFamily: "'Inter', 'Roboto', sans-serif" }}>{fmtH(totalHours)}</div>
@@ -7390,7 +7440,7 @@ export default function WorkHoursTracker({ onImport }) {
                         </div>
                       ))}
                     </div>
-                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12 }}>
+                    <div className="wht-grid-3col" style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12 }}>
                       <div style={{ background: "#ffffff", border: "1px solid #dadce0", borderRadius: 12, padding: "18px 22px", textAlign: "center", boxShadow: "0 1px 3px rgba(0,0,0,0.08)" }}>
                         <div style={{ fontSize: 13, color: "#5f6368", textTransform: "uppercase", letterSpacing: "1px", marginBottom: 8 }}>Year Total</div>
                         <div style={{ fontSize: 30, fontWeight: 700, fontFamily: "'Inter', 'Roboto', sans-serif" }}>{fmtH(totalHours)}</div>
@@ -7697,7 +7747,7 @@ export default function WorkHoursTracker({ onImport }) {
             />
           </div>
 
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+          <div className="wht-grid-2col" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
             <AdminList title="Default Activities" items={config.activities} onUpdate={v => setConfig(prev => ({ ...prev, activities: v }))} color="#80868b"
               favourites={config.favouriteActivities || []}
               onToggleFav={name => setConfig(prev => {
@@ -7727,7 +7777,7 @@ export default function WorkHoursTracker({ onImport }) {
             <div style={{ flex: 1, height: 1, background: "#f2d8b5" }} />
           </div>
 
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+          <div className="wht-grid-2col" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
             <AdminList title="Roles" items={config.roles || []} onUpdate={v => setConfig(prev => ({ ...prev, roles: v }))} color="#e37400" />
             <AdminList title="Bill Rates" items={config.billRates || []} onUpdate={v => setConfig(prev => ({ ...prev, billRates: v }))} color="#0d904f"
               favourites={config.favouriteBillRates || []}
@@ -7866,7 +7916,7 @@ export default function WorkHoursTracker({ onImport }) {
             </div>
             <div style={{ height: 1, background: "#e8eaed", margin: "16px 0" }} />
             <div style={{ fontSize: 13, fontWeight: 600, color: "#5f6368", textTransform: "uppercase", letterSpacing: "1px", marginBottom: 12 }}>Defaults for new entries</div>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12 }}>
+            <div className="wht-grid-3col" style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12 }}>
               <div>
                 <div style={{ fontSize: 13, color: "#5f6368", marginBottom: 5 }}>Default Customer</div>
                 <FavSel value={defaults.customer} onChange={v => setDefaults(prev => ({ ...prev, customer: v }))} options={getItemNames(config.customers)} configItems={config.customers} placeholder="— None —" />
