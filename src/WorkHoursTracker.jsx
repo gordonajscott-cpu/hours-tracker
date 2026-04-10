@@ -1598,6 +1598,8 @@ export default function WorkHoursTracker({ onImport }) {
   const [quoteDismissed, setQuoteDismissed] = useState("");
   const [quoteOffset, setQuoteOffset] = useState(0);
   const [tasks, setTasks] = useState([]);
+  const [tasksLoaded, setTasksLoaded] = useState(false);
+  const [tasksLoadError, setTasksLoadError] = useState("");
   const [taskFilter, setTaskFilter] = useState("all"); // all, not_started, in_progress, on_hold
   const [taskSort, setTaskSort] = useState("priority"); // priority, due, title
   const [taskDurationFilter, setTaskDurationFilter] = useState(0);
@@ -1878,12 +1880,18 @@ export default function WorkHoursTracker({ onImport }) {
         try {
           if (supabaseConfigured && userId !== 'local') {
             const supaTasks = await loadTasks(userId);
-            if (supaTasks && supaTasks.length > 0) setTasks(supaTasks);
+            if (supaTasks) setTasks(supaTasks);
           } else {
             const tk = await storageAdapter.get(TASKS_KEY).catch(() => null);
             if (tk?.value) setTasks(JSON.parse(tk.value));
           }
-        } catch (e) {}
+          setTasksLoaded(true);
+        } catch (e) {
+          console.error("Failed to load tasks:", e);
+          setTasksLoadError(e?.message || "Failed to load tasks");
+          // Deliberately do NOT set tasksLoaded — auto-save stays disabled
+          // to prevent overwriting the database with an empty array.
+        }
 
       } catch (e) { console.log("Fresh start"); }
       setLastSaved(new Date());
@@ -2627,15 +2635,19 @@ export default function WorkHoursTracker({ onImport }) {
   // Save tasks
   useEffect(() => {
     if (loading) return;
+    // CRITICAL: never auto-save tasks until a successful load has completed.
+    // Without this guard, a transient Supabase load failure would leave tasks=[]
+    // and the save effect would DELETE every task from the database.
+    if (!tasksLoaded) return;
     const t = setTimeout(() => {
       if (supabaseConfigured && userId !== 'local') {
-        saveTasks(userId, tasks).catch(() => {});
+        saveTasks(userId, tasks).catch(err => console.error("saveTasks failed:", err));
       } else {
         storageAdapter.set(TASKS_KEY, JSON.stringify(tasks)).catch(() => {});
       }
     }, 600);
     return () => clearTimeout(t);
-  }, [tasks, loading, userId, storageAdapter]);
+  }, [tasks, loading, tasksLoaded, userId, storageAdapter]);
 
   // Compute live timer end for calendar display
   const timerLiveEnd = useMemo(() => {
