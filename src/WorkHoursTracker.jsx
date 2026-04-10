@@ -3805,20 +3805,22 @@ export default function WorkHoursTracker({ onImport }) {
               Last saved {lastSaved.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}
             </span>
           )}
-          <button onClick={refreshFromStorage} title="Refresh from storage — pull latest data from other devices" style={{
-            background: "transparent", border: "1px solid #dadce0", color: "#5f6368",
+          <button onClick={() => setActiveTab("admin")} title="Admin / Settings" style={{
+            background: activeTab === "admin" ? "#e8f0fe" : "transparent",
+            border: `1px solid ${activeTab === "admin" ? "#1a73e8" : "#dadce0"}`,
+            color: activeTab === "admin" ? "#1a73e8" : "#5f6368",
             padding: isMobile ? "6px 8px" : "6px 10px",
-            borderRadius: 8, cursor: "pointer", fontSize: 14, display: "flex", alignItems: "center", gap: 4,
+            borderRadius: 8, cursor: "pointer", fontSize: 16, display: "flex", alignItems: "center", gap: 4,
             marginLeft: isMobile ? "auto" : (saveStatus || lastSaved ? 8 : "auto"),
             flexShrink: 0,
           }}
-            onMouseEnter={e => { e.currentTarget.style.background = "#f1f3f4"; }}
-            onMouseLeave={e => { e.currentTarget.style.background = "transparent"; }}
+            onMouseEnter={e => { if (activeTab !== "admin") e.currentTarget.style.background = "#f1f3f4"; }}
+            onMouseLeave={e => { if (activeTab !== "admin") e.currentTarget.style.background = "transparent"; }}
           >
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M21 2v6h-6" /><path d="M3 12a9 9 0 0 1 15-6.7L21 8" /><path d="M3 22v-6h6" /><path d="M21 12a9 9 0 0 1-15 6.7L3 16" />
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="12" cy="12" r="3" />
+              <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
             </svg>
-            {!isMobile && <span style={{ fontSize: 12, fontWeight: 600 }}>Sync</span>}
           </button>
           <button onClick={() => setDarkMode(d => !d)} title={darkMode ? "Light mode" : "Dark mode"} style={{
             background: "transparent", border: "1px solid #dadce0", color: "#5f6368",
@@ -4023,7 +4025,6 @@ export default function WorkHoursTracker({ onImport }) {
           ["week", "📅", "Week"],
           ["tasks", "✓", "Tasks"],
           ["reports", "📈", "Reports"],
-          ["admin", "⚙", "Admin"],
         ].map(([tab, icon, label]) => (
           <button key={tab} onClick={() => setActiveTab(tab)} title={label} style={{
             fontFamily: "'Inter', 'Roboto', sans-serif", fontSize: isMobile ? 11 : 14, fontWeight: 500,
