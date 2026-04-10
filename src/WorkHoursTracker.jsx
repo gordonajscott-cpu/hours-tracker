@@ -3753,7 +3753,7 @@ export default function WorkHoursTracker({ onImport }) {
   );
 
   return (
-    <div style={{ fontFamily: "'Inter', 'Roboto', 'Segoe UI', sans-serif", minHeight: "100vh", maxWidth: "100vw", overflowX: "hidden", background: darkMode ? "#1a1a2e" : "#f1f3f4", color: darkMode ? "#e0e0e0" : "#202124", padding: isMobile ? "10px 10px 60px" : "28px 28px 28px", boxSizing: "border-box", transition: "background 0.3s, color 0.3s" }}>
+    <div className={darkMode ? "wht-app wht-dark" : "wht-app"} style={{ fontFamily: "'Inter', 'Roboto', 'Segoe UI', sans-serif", minHeight: "100vh", maxWidth: "100vw", overflowX: "hidden", background: darkMode ? "#1a1a2e" : "#f1f3f4", color: darkMode ? "#e0e0e0" : "#202124", padding: isMobile ? "10px 10px 60px" : "28px 28px 28px", boxSizing: "border-box", transition: "background 0.3s, color 0.3s" }}>
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Roboto:wght@400;500;700&display=swap');
         * { box-sizing: border-box; }
@@ -3785,6 +3785,134 @@ export default function WorkHoursTracker({ onImport }) {
         /* Larger touch targets on touch devices */
         @media (hover: none) and (pointer: coarse) {
           button { min-height: 36px; }
+        }
+
+        /* ════════════════════════════════════════════════════════════
+           DARK MODE OVERRIDES
+           Targets inline-styled elements by matching the serialized
+           style attribute (browsers normalize hex → rgb() form).
+           ════════════════════════════════════════════════════════════ */
+
+        /* Light card / surface backgrounds → dark */
+        .wht-dark [style*="background: rgb(255, 255, 255)"],
+        .wht-dark [style*="background-color: rgb(255, 255, 255)"],
+        .wht-dark [style*="background: #fff"],
+        .wht-dark [style*="background:#fff"],
+        .wht-dark [style*="background-color: #fff"] {
+          background-color: #252538 !important;
+        }
+        .wht-dark [style*="background: rgb(248, 249, 250)"],
+        .wht-dark [style*="background-color: rgb(248, 249, 250)"],
+        .wht-dark [style*="background: #f8f9fa"] {
+          background-color: #1f1f30 !important;
+        }
+        .wht-dark [style*="background: rgb(241, 243, 244)"],
+        .wht-dark [style*="background-color: rgb(241, 243, 244)"],
+        .wht-dark [style*="background: #f1f3f4"] {
+          background-color: #1a1a2e !important;
+        }
+        .wht-dark [style*="background: rgb(232, 234, 237)"],
+        .wht-dark [style*="background-color: rgb(232, 234, 237)"],
+        .wht-dark [style*="background: #e8eaed"] {
+          background-color: #2f2f44 !important;
+        }
+        .wht-dark [style*="background: rgb(243, 244, 246)"],
+        .wht-dark [style*="background: #f3f4f6"] {
+          background-color: #20203a !important;
+        }
+        .wht-dark [style*="background: rgb(250, 251, 252)"],
+        .wht-dark [style*="background: #fafbfc"] {
+          background-color: #1e1e32 !important;
+        }
+        /* Light blue pill backgrounds → desaturated dark */
+        .wht-dark [style*="background: rgb(232, 240, 254)"],
+        .wht-dark [style*="background: #e8f0fe"] {
+          background-color: #1e3a5f !important;
+        }
+        .wht-dark [style*="background: rgb(210, 227, 252)"],
+        .wht-dark [style*="background: #d2e3fc"] {
+          background-color: #1e3a5f !important;
+        }
+
+        /* Dark text colors → light */
+        .wht-dark [style*="color: rgb(32, 33, 36)"],
+        .wht-dark [style*="color:#202124"],
+        .wht-dark [style*="color: #202124"] {
+          color: #e8eaed !important;
+        }
+        .wht-dark [style*="color: rgb(60, 64, 67)"],
+        .wht-dark [style*="color: #3c4043"] {
+          color: #d4d4d4 !important;
+        }
+        .wht-dark [style*="color: rgb(95, 99, 104)"],
+        .wht-dark [style*="color: #5f6368"] {
+          color: #9aa0a6 !important;
+        }
+        .wht-dark [style*="color: rgb(128, 134, 139)"],
+        .wht-dark [style*="color: #80868b"] {
+          color: #9aa0a6 !important;
+        }
+
+        /* Borders */
+        .wht-dark [style*="rgb(218, 220, 224)"],
+        .wht-dark [style*="#dadce0"] {
+          border-color: #3a3a4e !important;
+        }
+        .wht-dark [style*="rgb(232, 234, 237)"],
+        .wht-dark [style*="#e8eaed"] {
+          border-color: #3a3a4e !important;
+        }
+        .wht-dark [style*="rgb(189, 193, 198)"],
+        .wht-dark [style*="#bdc1c6"] {
+          border-color: #4a4a5e !important;
+        }
+
+        /* Form fields */
+        .wht-dark input,
+        .wht-dark select,
+        .wht-dark textarea {
+          background-color: #2a2a3e !important;
+          color: #e8eaed !important;
+          border-color: #3a3a4e !important;
+        }
+        .wht-dark input::placeholder,
+        .wht-dark textarea::placeholder {
+          color: #80868b !important;
+        }
+        .wht-dark select option {
+          background-color: #2a2a3e !important;
+          color: #e8eaed !important;
+        }
+
+        /* Buttons with light backgrounds */
+        .wht-dark button[style*="background: rgb(255, 255, 255)"],
+        .wht-dark button[style*="background-color: rgb(255, 255, 255)"] {
+          background-color: #2a2a3e !important;
+          color: #e8eaed !important;
+        }
+
+        /* Tables / rows */
+        .wht-dark tr[style*="background: rgb(255, 255, 255)"],
+        .wht-dark tr[style*="background: #fff"],
+        .wht-dark td[style*="background: rgb(255, 255, 255)"] {
+          background-color: #252538 !important;
+        }
+
+        /* Scrollbars in dark mode */
+        .wht-dark ::-webkit-scrollbar-thumb {
+          background: #4a4a5e !important;
+        }
+
+        /* Daily quote banner gradient */
+        .wht-dark [style*="linear-gradient(135deg, rgb(232, 240, 254)"],
+        .wht-dark [style*="linear-gradient(135deg, #e8f0fe"] {
+          background: linear-gradient(135deg, #1e3a5f, #2a2450) !important;
+        }
+
+        /* Shadow tweaks for better contrast on dark cards */
+        .wht-dark [style*="box-shadow: rgba(0, 0, 0, 0.06)"],
+        .wht-dark [style*="box-shadow:0 1px 3px rgba(0,0,0,0.06)"] {
+          box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4) !important;
         }
       `}</style>
 
