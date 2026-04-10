@@ -4016,6 +4016,7 @@ export default function WorkHoursTracker({ onImport }) {
         overflowX: isMobile ? "auto" : "visible",
         scrollbarWidth: "none",
         msOverflowStyle: "none",
+        width: "100%", maxWidth: "100%", minWidth: 0,
       }}>
         {[
           ["dashboard", "📊", "Dashboard"],
@@ -4024,22 +4025,27 @@ export default function WorkHoursTracker({ onImport }) {
           ["reports", "📈", "Reports"],
           ["admin", "⚙", "Admin"],
         ].map(([tab, icon, label]) => (
-          <button key={tab} onClick={() => setActiveTab(tab)} style={{
-            fontFamily: "'Inter', 'Roboto', sans-serif", fontSize: isMobile ? 13 : 14, fontWeight: 500,
+          <button key={tab} onClick={() => setActiveTab(tab)} title={label} style={{
+            fontFamily: "'Inter', 'Roboto', sans-serif", fontSize: isMobile ? 11 : 14, fontWeight: 500,
             textTransform: "capitalize", letterSpacing: "0.25px",
-            padding: isMobile ? "10px 12px" : "12px 24px",
+            padding: isMobile ? "8px 2px" : "12px 24px",
             background: "transparent",
             color: activeTab === tab ? "#1a73e8" : "#5f6368",
             border: "none",
             borderBottom: activeTab === tab ? "3px solid #1a73e8" : "3px solid transparent",
             cursor: "pointer",
             transition: "all 0.2s",
-            flex: isMobile ? "1 0 auto" : "0 0 auto",
+            flex: isMobile ? "1 1 0" : "0 0 auto",
+            minWidth: 0,
             whiteSpace: "nowrap",
-            display: "flex", alignItems: "center", gap: 6, justifyContent: "center",
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+            display: "flex",
+            flexDirection: isMobile ? "column" : "row",
+            alignItems: "center", gap: isMobile ? 2 : 6, justifyContent: "center",
           }}>
-            <span style={{ fontSize: isMobile ? 16 : 14 }}>{icon}</span>
-            <span>{label}</span>
+            <span style={{ fontSize: isMobile ? 18 : 14 }}>{icon}</span>
+            <span style={{ maxWidth: "100%", overflow: "hidden", textOverflow: "ellipsis" }}>{label}</span>
           </button>
         ))}
       </div>
@@ -4074,7 +4080,7 @@ export default function WorkHoursTracker({ onImport }) {
         }));
         return (
           <div>
-            <div style={{ fontSize: 18, fontWeight: 700, color: darkMode ? "#e0e0e0" : "#202124", marginBottom: 16 }}>📊 Dashboard — {n.toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long" })}</div>
+            <div style={{ fontSize: isMobile ? 15 : 18, fontWeight: 700, color: darkMode ? "#e0e0e0" : "#202124", marginBottom: 16, overflowWrap: "anywhere" }}>📊 Dashboard{isMobile ? "" : " — "}{isMobile ? <><br />{n.toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" })}</> : n.toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long" })}</div>
 
             {/* Top stats */}
             <div className="wht-grid-5col" style={{ display: "grid", gridTemplateColumns: "repeat(6, 1fr)", gap: 12, marginBottom: 20 }}>
