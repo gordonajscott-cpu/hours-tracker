@@ -303,6 +303,20 @@ function stripOptionalColumns(rows) {
   });
 }
 
+// PostgREST returns at least two different messages for unknown columns:
+//   - "column \"foo\" does not exist"  (direct Postgres error)
+//   - "Could not find the 'foo' column of 'tasks' in the schema cache"
+// Also catches PGRST204 which is the schema cache variant.
+function isMissingColumnError(error) {
+  if (!error) return false;
+  const msg = (error.message || '') + ' ' + (error.code || '') + ' ' + (error.hint || '');
+  return (
+    /column .* does not exist/i.test(msg) ||
+    /could not find .* column/i.test(msg) ||
+    /PGRST204/i.test(msg)
+  );
+}
+
 export async function saveTasks(userId, tasks) {
   if (!supabaseConfigured || !userId) return;
   const { error: delErr } = await supabase.from('tasks').delete().eq('user_id', userId);
@@ -312,7 +326,7 @@ export async function saveTasks(userId, tasks) {
   for (let i = 0; i < rows.length; i += 500) {
     const chunk = rows.slice(i, i + 500);
     let { error } = await supabase.from('tasks').insert(chunk);
-    if (error && /column .* does not exist/i.test(error.message || '')) {
+    if (isMissingColumnError(error)) {
       // Retry without columns from later migrations
       ({ error } = await supabase.from('tasks').insert(stripOptionalColumns(chunk)));
     }
@@ -327,7 +341,18 @@ export async function importTasks(userId, tasks) {
     throw new Error('Supabase not configured or user not signed in');
   }
   if (!Array.isArray(tasks) || tasks.length === 0) return { inserted: 0 };
-  const rows = tasks.map((t, i) => taskToRow(t, i, userId));
+  let rows = tasks.map((t, i) => taskToRow(t, i, userId));
+
+  // Probe once up-front: if the DB is on an older schema and is missing an
+  // optional column, strip it from every row before we start batching.
+  // (upsert is idempotent so re-processing row 0 in the main loop is fine.)
+  const probe = await supabase
+    .from('tasks')
+    .upsert([rows[0]], { onConflict: 'user_id,id' });
+  if (isMissingColumnError(probe.error)) {
+    rows = stripOptionalColumns(rows);
+  }
+
   let inserted = 0;
   const failures = [];
   for (let i = 0; i < rows.length; i += 100) {
@@ -335,7 +360,7 @@ export async function importTasks(userId, tasks) {
     let { error } = await supabase
       .from('tasks')
       .upsert(chunk, { onConflict: 'user_id,id' });
-    if (error && /column .* does not exist/i.test(error.message || '')) {
+    if (isMissingColumnError(error)) {
       ({ error } = await supabase
         .from('tasks')
         .upsert(stripOptionalColumns(chunk), { onConflict: 'user_id,id' }));
@@ -346,7 +371,7 @@ export async function importTasks(userId, tasks) {
         let r = await supabase
           .from('tasks')
           .upsert([row], { onConflict: 'user_id,id' });
-        if (r.error && /column .* does not exist/i.test(r.error.message || '')) {
+        if (isMissingColumnError(r.error)) {
           r = await supabase
             .from('tasks')
             .upsert(stripOptionalColumns([row]), { onConflict: 'user_id,id' });
