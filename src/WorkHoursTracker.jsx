@@ -1586,14 +1586,6 @@ function NoteAutoComplete({ value, onChange, onSelectEntry, onEnter, noteHistory
 export default function WorkHoursTracker({ onImport }) {
   const { user } = useAuth();
   const userId = user?.id || 'local';
-  // Only pass a profile id to the storage layer once profiles have been
-  // detected as available (migration 004 applied). Before that, the storage
-  // adapter behaves exactly as it did pre-profiles so nothing breaks.
-  const effectiveProfileId = profilesAvailable ? activeProfileId : null;
-  const storageAdapter = useMemo(
-    () => getStorage(userId, effectiveProfileId),
-    [userId, effectiveProfileId],
-  );
   const now = new Date();
   const [currentYear, setCurrentYear] = useState(now.getFullYear());
   const [currentWeek, setCurrentWeek] = useState(getWeekNumber(now));
@@ -1619,6 +1611,14 @@ export default function WorkHoursTracker({ onImport }) {
   const [profilesAvailable, setProfilesAvailable] = useState(false);
   const [profilesVersion, setProfilesVersion] = useState(0);
   const [profileSwitching, setProfileSwitching] = useState(false);
+  // Only pass a profile id to the storage layer once profiles have been
+  // detected as available (migration 004 applied). Before that, the storage
+  // adapter behaves exactly as it did pre-profiles so nothing breaks.
+  const effectiveProfileId = profilesAvailable ? activeProfileId : null;
+  const storageAdapter = useMemo(
+    () => getStorage(userId, effectiveProfileId),
+    [userId, effectiveProfileId],
+  );
   const [taskFilter, setTaskFilter] = useState("all"); // all, not_started, in_progress, on_hold
   const [taskSort, setTaskSort] = useState("priority"); // priority, due, title
   const [taskDurationFilter, setTaskDurationFilter] = useState(0);
