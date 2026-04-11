@@ -6853,9 +6853,14 @@ export default function WorkHoursTracker({ onImport }) {
                     <input type="checkbox" checked={batchSelected.has(task.id)} onChange={() => setBatchSelected(prev => { const s = new Set(prev); s.has(task.id) ? s.delete(task.id) : s.add(task.id); return s; })}
                       onClick={e => e.stopPropagation()} style={{ width: 16, height: 16, accentColor: "#1a73e8", cursor: "pointer", flexShrink: 0 }} />
                     <span style={{ fontSize: 14, fontWeight: 600, padding: "3px 8px", borderRadius: 8, background: st.bg, color: st.text, flexShrink: 0 }}>{st.label === "Not Started" ? "○" : st.label === "In Progress" ? "▶" : st.label === "Waiting For" ? "⏳" : "⏸"}</span>
-                    <span onClick={() => setEditingTaskId(task.id)} style={{ flex: 1, fontSize: 14, fontWeight: 600, color: "#202124", overflow: "hidden", whiteSpace: "nowrap", textOverflow: "ellipsis", cursor: "pointer", minWidth: 80 }}
-                      onMouseEnter={e => e.currentTarget.style.textDecoration = "underline"}
-                      onMouseLeave={e => e.currentTarget.style.textDecoration = "none"}
+                    <span onClick={() => setEditingTaskId(task.id)} style={{
+                      flex: 1, fontSize: 14, fontWeight: 600, color: "#202124", cursor: "pointer",
+                      ...(isMobile
+                        ? { flexBasis: "100%", minWidth: 0, whiteSpace: "normal", wordBreak: "break-word", lineHeight: 1.3 }
+                        : { overflow: "hidden", whiteSpace: "nowrap", textOverflow: "ellipsis", minWidth: 80 }),
+                    }}
+                      onMouseEnter={e => !isMobile && (e.currentTarget.style.textDecoration = "underline")}
+                      onMouseLeave={e => !isMobile && (e.currentTarget.style.textDecoration = "none")}
                     >{task.title}</span>
                     {/* Urgent / Now toggles */}
                     <button onClick={e => { e.stopPropagation(); updateTask(task.id, { urgent: !task.urgent }); }} title={task.urgent ? "Remove urgent" : "Mark urgent"} style={{
