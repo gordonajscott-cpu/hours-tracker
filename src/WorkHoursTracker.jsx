@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect, useCallback, useRef } from "react";
 import { useAuth } from "./lib/AuthContext";
-import { getStorage, loadAllData, saveAllData, loadTasks, saveTasks, createBackup, listBackups, getBackup, deleteBackup, pruneBackups, BackupsTableMissingError } from "./lib/storage";
+import { getStorage, loadAllData, saveAllData, loadTasks, saveTasks, createBackup, listBackups, getBackup, deleteBackup, pruneBackups, BackupsTableMissingError, ensureDefaultProfile, createProfile, renameProfile, deleteProfile, ProfilesTableMissingError } from "./lib/storage";
 import { supabase, supabaseConfigured } from "./lib/supabase";
 
 const DAYS = ["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"];
@@ -1586,7 +1586,14 @@ function NoteAutoComplete({ value, onChange, onSelectEntry, onEnter, noteHistory
 export default function WorkHoursTracker({ onImport }) {
   const { user } = useAuth();
   const userId = user?.id || 'local';
-  const storageAdapter = useMemo(() => getStorage(userId), [userId]);
+  // Only pass a profile id to the storage layer once profiles have been
+  // detected as available (migration 004 applied). Before that, the storage
+  // adapter behaves exactly as it did pre-profiles so nothing breaks.
+  const effectiveProfileId = profilesAvailable ? activeProfileId : null;
+  const storageAdapter = useMemo(
+    () => getStorage(userId, effectiveProfileId),
+    [userId, effectiveProfileId],
+  );
   const now = new Date();
   const [currentYear, setCurrentYear] = useState(now.getFullYear());
   const [currentWeek, setCurrentWeek] = useState(getWeekNumber(now));
@@ -1606,6 +1613,12 @@ export default function WorkHoursTracker({ onImport }) {
   const [backupsTableMissing, setBackupsTableMissing] = useState(false);
   const [backupBusy, setBackupBusy] = useState("");
   const [didAutoBackup, setDidAutoBackup] = useState(false);
+  // Profiles (multi-profile support, requires migration 004)
+  const [profiles, setProfiles] = useState([]);
+  const [activeProfileId, setActiveProfileId] = useState("default");
+  const [profilesAvailable, setProfilesAvailable] = useState(false);
+  const [profilesVersion, setProfilesVersion] = useState(0);
+  const [profileSwitching, setProfileSwitching] = useState(false);
   const [taskFilter, setTaskFilter] = useState("all"); // all, not_started, in_progress, on_hold
   const [taskSort, setTaskSort] = useState("priority"); // priority, due, title
   const [taskDurationFilter, setTaskDurationFilter] = useState(0);
@@ -1770,18 +1783,26 @@ export default function WorkHoursTracker({ onImport }) {
   }, [timerStatus]);
 
   // ═══ STORAGE ═══
+  // Re-runs whenever the effective profile changes (including initial mount and
+  // user-triggered profile switches). Cancellation flag guards against a later
+  // load overwriting an in-flight one's setState calls.
   useEffect(() => {
+    let cancelled = false;
     async function load() {
+      setLoading(true);
+      setTasksLoaded(false);
       try {
         const [dr, cr, sr] = await Promise.all([
           storageAdapter.get(DATA_KEY).catch(() => null),
           storageAdapter.get(CONFIG_KEY).catch(() => null),
           storageAdapter.get(SETTINGS_KEY).catch(() => null)
         ]);
+        if (cancelled) return;
         let loadedData = {};
         // In Supabase mode, load time entries from the entries table
         if (supabaseConfigured && userId !== 'local') {
-          const supaData = await loadAllData(userId);
+          const supaData = await loadAllData(userId, effectiveProfileId);
+          if (cancelled) return;
           if (supaData) loadedData = supaData;
         } else if (dr?.value) {
           loadedData = JSON.parse(dr.value);
@@ -1793,8 +1814,13 @@ export default function WorkHoursTracker({ onImport }) {
         let loadedDefs = { customer: "", project: "", workOrder: "", activity: "", role: "" };
         if (sr?.value) { const s = JSON.parse(sr.value); if (s.standardHours) setStandardHours(s.standardHours); if (s.defaults) { loadedDefs = { ...loadedDefs, ...s.defaults }; setDefaults(prev => ({ ...prev, ...s.defaults })); } }
 
-        // Seed data for Jan/Feb/Mar 2026 if not present
-        const needsSeed = !loadedData["2026-W2"]; // Check a mid-January week
+        // Seed data for Jan/Feb/Mar 2026 on truly fresh installs only. Skip for
+        // newly-created profiles and for profile switches (which both have
+        // empty data but should stay empty).
+        const seedMarkerKey = `wht-v3-seeded-${userId || 'local'}`;
+        const alreadySeeded = localStorage.getItem(seedMarkerKey) === '1';
+        const isDefaultScope = !effectiveProfileId || effectiveProfileId === 'default';
+        const needsSeed = !loadedData["2026-W2"] && !alreadySeeded && isDefaultScope;
         if (needsSeed) {
           function seedEntry(start, end, extra) {
             return { id: uid(), start, end, customer: loadedDefs.customer || "", project: loadedDefs.project || "", workOrder: loadedDefs.workOrder || "", activity: loadedDefs.activity || "", role: loadedDefs.role || "", tags: [], note: "", ...extra };
@@ -1856,8 +1882,10 @@ export default function WorkHoursTracker({ onImport }) {
           }
 
           loadedData = seed;
+          localStorage.setItem(seedMarkerKey, '1');
         }
 
+        if (cancelled) return;
         setAllData(loadedData);
 
         // Restore timer state
@@ -1885,12 +1913,19 @@ export default function WorkHoursTracker({ onImport }) {
         // Load tasks
         try {
           if (supabaseConfigured && userId !== 'local') {
-            const supaTasks = await loadTasks(userId);
-            if (supaTasks) setTasks(supaTasks);
+            const supaTasks = await loadTasks(userId, effectiveProfileId);
+            if (cancelled) return;
+            // Always assign (empty array is valid for a new profile). This
+            // also ensures the previous profile's tasks aren't left on screen
+            // during a profile switch.
+            setTasks(supaTasks || []);
           } else {
             const tk = await storageAdapter.get(TASKS_KEY).catch(() => null);
+            if (cancelled) return;
             if (tk?.value) setTasks(JSON.parse(tk.value));
+            else setTasks([]);
           }
+          if (cancelled) return;
           setTasksLoaded(true);
         } catch (e) {
           console.error("Failed to load tasks:", e);
@@ -1900,11 +1935,15 @@ export default function WorkHoursTracker({ onImport }) {
         }
 
       } catch (e) { console.log("Fresh start"); }
+      if (cancelled) return;
       setLastSaved(new Date());
       setLoading(false);
+      setProfileSwitching(false);
     }
     load();
-  }, []);
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [userId, effectiveProfileId]);
 
   const save = useCallback(async (data, cfg, hrs, defs) => {
     try {
@@ -1917,7 +1956,7 @@ export default function WorkHoursTracker({ onImport }) {
 
       if (supabaseConfigured && userId !== 'local') {
         await Promise.all([
-          saveAllData(userId, data),
+          saveAllData(userId, data, effectiveProfileId),
           storageAdapter.set(CONFIG_KEY, JSON.stringify(cfg)),
           storageAdapter.set(SETTINGS_KEY, JSON.stringify({ standardHours: hrs, defaults: defs }))
         ]);
@@ -1932,7 +1971,7 @@ export default function WorkHoursTracker({ onImport }) {
       setSaveStatus("saved");
       setTimeout(() => setSaveStatus(""), 2000);
     } catch (e) { setSaveStatus("error"); setTimeout(() => setSaveStatus(""), 3000); }
-  }, [userId, storageAdapter]);
+  }, [userId, storageAdapter, effectiveProfileId]);
 
   const [showExport, setShowExport] = useState(null); // null or JSON string
   const [showImport, setShowImport] = useState(false);
@@ -1993,7 +2032,7 @@ export default function WorkHoursTracker({ onImport }) {
     try {
       if (supabaseConfigured && userId !== 'local') {
         const [supaData, cr, sr] = await Promise.all([
-          loadAllData(userId),
+          loadAllData(userId, effectiveProfileId),
           storageAdapter.get(CONFIG_KEY).catch(() => null),
           storageAdapter.get(SETTINGS_KEY).catch(() => null)
         ]);
@@ -2007,7 +2046,7 @@ export default function WorkHoursTracker({ onImport }) {
           if (s.standardHours) setStandardHours(s.standardHours);
           if (s.defaults) setDefaults(prev => ({ ...prev, ...s.defaults }));
         }
-        const supaTasks = await loadTasks(userId);
+        const supaTasks = await loadTasks(userId, effectiveProfileId);
         if (supaTasks) setTasks(supaTasks);
       } else {
         const [dr, cr, sr] = await Promise.all([
@@ -2040,6 +2079,108 @@ export default function WorkHoursTracker({ onImport }) {
     const t = setTimeout(() => save(allData, config, standardHours, defaults), 600);
     return () => clearTimeout(t);
   }, [allData, config, standardHours, defaults, loading, save]);
+
+  // ═══ PROFILES ═══
+  // Probe the profiles table on mount/user change. If the migration hasn't
+  // been run, stay in pre-profiles mode (no filtering). Otherwise hydrate the
+  // profile list and restore the last active profile from localStorage.
+  useEffect(() => {
+    if (!userId || userId === "local" || !supabaseConfigured) {
+      setProfilesAvailable(false);
+      setProfiles([]);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      try {
+        const list = await ensureDefaultProfile(userId);
+        if (cancelled) return;
+        if (list === null) {
+          setProfilesAvailable(false);
+          setProfiles([]);
+          return;
+        }
+        setProfilesAvailable(true);
+        setProfiles(list);
+        const storedId = localStorage.getItem(`wht-v3-active-profile-${userId}`);
+        const valid = storedId && list.some(p => p.id === storedId) ? storedId : "default";
+        if (valid !== activeProfileId) setActiveProfileId(valid);
+      } catch (err) {
+        console.error("Profile probe failed:", err);
+        if (!cancelled) setProfilesAvailable(false);
+      }
+    })();
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [userId, profilesVersion]);
+
+  // Persist the active profile id per user so reloads stay on the same one.
+  useEffect(() => {
+    if (!profilesAvailable || !userId || userId === "local") return;
+    localStorage.setItem(`wht-v3-active-profile-${userId}`, activeProfileId);
+  }, [activeProfileId, userId, profilesAvailable]);
+
+  const switchProfile = useCallback((nextId) => {
+    if (!profilesAvailable || nextId === activeProfileId) return;
+    // Flush any pending saves to the CURRENT profile first, so nothing lands
+    // in the wrong bucket when the storage adapter flips.
+    save(allData, config, standardHours, defaults);
+    setProfileSwitching(true);
+    setActiveProfileId(nextId);
+  }, [profilesAvailable, activeProfileId, save, allData, config, standardHours, defaults]);
+
+  async function addProfile(name) {
+    if (!profilesAvailable) return;
+    const trimmed = (name || "").trim();
+    if (!trimmed) return;
+    const id = Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+    try {
+      await createProfile(userId, id, trimmed);
+      setProfilesVersion(v => v + 1);
+      // Switch to the new profile immediately after creation
+      setTimeout(() => switchProfile(id), 0);
+    } catch (err) {
+      if (err instanceof ProfilesTableMissingError) {
+        setProfilesAvailable(false);
+      } else {
+        console.error("createProfile failed:", err);
+        alert("Could not create profile: " + (err?.message || "Unknown error"));
+      }
+    }
+  }
+
+  async function renameProfileAction(id, newName) {
+    const trimmed = (newName || "").trim();
+    if (!trimmed) return;
+    try {
+      await renameProfile(userId, id, trimmed);
+      setProfiles(prev => prev.map(p => p.id === id ? { ...p, name: trimmed } : p));
+    } catch (err) {
+      console.error("renameProfile failed:", err);
+      alert("Could not rename profile: " + (err?.message || "Unknown error"));
+    }
+  }
+
+  async function removeProfile(id) {
+    if (id === "default") {
+      alert("The Default profile cannot be deleted.");
+      return;
+    }
+    const p = profiles.find(x => x.id === id);
+    if (!window.confirm(`Delete profile "${p?.name || id}" and all its data? This cannot be undone.`)) return;
+    try {
+      // If we're deleting the active profile, switch to default first so the
+      // load effect doesn't race the delete.
+      if (id === activeProfileId) {
+        setActiveProfileId("default");
+      }
+      await deleteProfile(userId, id);
+      setProfilesVersion(v => v + 1);
+    } catch (err) {
+      console.error("deleteProfile failed:", err);
+      alert("Could not delete profile: " + (err?.message || "Unknown error"));
+    }
+  }
 
   // ═══ WEEK DATA ═══
   const weekKey = `${currentYear}-W${currentWeek}`;
@@ -2647,13 +2788,13 @@ export default function WorkHoursTracker({ onImport }) {
     if (!tasksLoaded) return;
     const t = setTimeout(() => {
       if (supabaseConfigured && userId !== 'local') {
-        saveTasks(userId, tasks).catch(err => console.error("saveTasks failed:", err));
+        saveTasks(userId, tasks, effectiveProfileId).catch(err => console.error("saveTasks failed:", err));
       } else {
         storageAdapter.set(TASKS_KEY, JSON.stringify(tasks)).catch(() => {});
       }
     }, 600);
     return () => clearTimeout(t);
-  }, [tasks, loading, tasksLoaded, userId, storageAdapter]);
+  }, [tasks, loading, tasksLoaded, userId, storageAdapter, effectiveProfileId]);
 
   // ── AUTOMATIC BACKUPS ──
   // Snapshots the full state into the `backups` table once per 24h while the
@@ -4086,13 +4227,41 @@ export default function WorkHoursTracker({ onImport }) {
               Last saved {lastSaved.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}
             </span>
           )}
+          {profilesAvailable && profiles.length > 0 && (
+            <select
+              value={activeProfileId}
+              onChange={e => switchProfile(e.target.value)}
+              title="Switch profile"
+              disabled={profileSwitching}
+              style={{
+                marginLeft: (saveStatus || (lastSaved && !isMobile)) ? 8 : "auto",
+                fontSize: isMobile ? 12 : 13,
+                fontWeight: 600,
+                color: "#1a73e8",
+                background: "#e8f0fe",
+                border: "1px solid #1a73e8",
+                padding: isMobile ? "6px 8px" : "6px 12px",
+                borderRadius: 8,
+                cursor: profileSwitching ? "wait" : "pointer",
+                outline: "none",
+                maxWidth: isMobile ? 120 : 180,
+                flexShrink: 0,
+              }}
+            >
+              {profiles.map(p => (
+                <option key={p.id} value={p.id}>{p.name}</option>
+              ))}
+            </select>
+          )}
           <button onClick={() => setActiveTab("admin")} title="Admin / Settings" style={{
             background: activeTab === "admin" ? "#e8f0fe" : "transparent",
             border: `1px solid ${activeTab === "admin" ? "#1a73e8" : "#dadce0"}`,
             color: activeTab === "admin" ? "#1a73e8" : "#5f6368",
             padding: isMobile ? "6px 8px" : "6px 10px",
             borderRadius: 8, cursor: "pointer", fontSize: 16, display: "flex", alignItems: "center", gap: 4,
-            marginLeft: isMobile ? "auto" : (saveStatus || lastSaved ? 8 : "auto"),
+            marginLeft: (profilesAvailable && profiles.length > 0) ? 8
+              : isMobile ? "auto"
+              : (saveStatus || lastSaved ? 8 : "auto"),
             flexShrink: 0,
           }}
             onMouseEnter={e => { if (activeTab !== "admin") e.currentTarget.style.background = "#f1f3f4"; }}
@@ -8389,6 +8558,98 @@ export default function WorkHoursTracker({ onImport }) {
                             cursor: busy ? "not-allowed" : "pointer",
                             fontFamily: "'Inter', 'Roboto', sans-serif", fontSize: 12, fontWeight: 600
                           }}>Delete</button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Profiles card (Supabase only) */}
+          {supabaseConfigured && userId !== "local" && (
+            <div style={{
+              background: "#ffffff", border: "1px solid #dadce0", borderRadius: 12,
+              padding: "18px 24px", marginTop: 16, boxShadow: "0 1px 3px rgba(0,0,0,0.08)"
+            }}>
+              <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
+                <div style={{ flex: "1 1 260px" }}>
+                  <div style={{ fontSize: 14, fontWeight: 600, color: "#202124" }}>👥 Profiles</div>
+                  <div style={{ fontSize: 12, color: "#80868b", marginTop: 2 }}>
+                    Keep separate sets of customers, projects, tasks, and time entries (e.g. Work vs Personal).
+                  </div>
+                </div>
+                {profilesAvailable && (
+                  <button onClick={() => {
+                    const name = window.prompt("New profile name:", "");
+                    if (name) addProfile(name);
+                  }} style={{
+                    background: "#1a73e8", border: "none", color: "#ffffff", padding: "8px 18px",
+                    borderRadius: 20, cursor: "pointer",
+                    fontFamily: "'Inter', 'Roboto', sans-serif", fontSize: 13, fontWeight: 600
+                  }}>+ New Profile</button>
+                )}
+              </div>
+
+              {!profilesAvailable ? (
+                <div style={{
+                  marginTop: 14, padding: "14px 16px", background: "#fef7e0",
+                  border: "1px solid #feefc3", borderRadius: 8, fontSize: 13, color: "#5f4400"
+                }}>
+                  <div style={{ fontWeight: 600, marginBottom: 6 }}>Setup required</div>
+                  <div>
+                    To enable multiple profiles, run the migration
+                    <code style={{ background: "#fff5d6", padding: "1px 6px", borderRadius: 4, margin: "0 4px", fontFamily: "monospace", fontSize: 12 }}>
+                      004_add_profiles.sql
+                    </code>
+                    in your Supabase SQL editor, then reload the app.
+                  </div>
+                </div>
+              ) : (
+                <div style={{ marginTop: 14, display: "flex", flexDirection: "column", gap: 8 }}>
+                  {profiles.map(p => {
+                    const isActive = p.id === activeProfileId;
+                    return (
+                      <div key={p.id} style={{
+                        display: "flex", alignItems: "center", justifyContent: "space-between",
+                        gap: 12, flexWrap: "wrap",
+                        padding: "10px 14px",
+                        background: isActive ? "#e8f0fe" : "#f8f9fa",
+                        border: `1px solid ${isActive ? "#1a73e8" : "#e8eaed"}`,
+                        borderRadius: 8
+                      }}>
+                        <div style={{ display: "flex", flexDirection: "column", gap: 2, minWidth: 0, flex: "1 1 240px" }}>
+                          <div style={{ fontSize: 14, fontWeight: 600, color: "#202124" }}>
+                            {p.name}{isActive && <span style={{ marginLeft: 8, fontSize: 11, fontWeight: 600, color: "#1a73e8", background: "#ffffff", padding: "2px 8px", borderRadius: 8, border: "1px solid #1a73e8" }}>Active</span>}
+                          </div>
+                          <div style={{ fontSize: 11, color: "#80868b" }}>
+                            {p.id === "default" ? "Default profile" : `ID: ${p.id}`}
+                          </div>
+                        </div>
+                        <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                          {!isActive && (
+                            <button onClick={() => switchProfile(p.id)} style={{
+                              background: "#1a73e8", border: "1px solid #1a73e8", color: "#ffffff",
+                              padding: "6px 12px", borderRadius: 16, cursor: "pointer",
+                              fontFamily: "'Inter', 'Roboto', sans-serif", fontSize: 12, fontWeight: 600
+                            }}>Switch</button>
+                          )}
+                          <button onClick={() => {
+                            const n = window.prompt("Rename profile:", p.name);
+                            if (n && n.trim()) renameProfileAction(p.id, n.trim());
+                          }} style={{
+                            background: "#ffffff", border: "1px solid #dadce0", color: "#5f6368",
+                            padding: "6px 12px", borderRadius: 16, cursor: "pointer",
+                            fontFamily: "'Inter', 'Roboto', sans-serif", fontSize: 12, fontWeight: 600
+                          }}>Rename</button>
+                          {p.id !== "default" && (
+                            <button onClick={() => removeProfile(p.id)} style={{
+                              background: "#ffffff", border: "1px solid #dadce0", color: "#d93025",
+                              padding: "6px 12px", borderRadius: 16, cursor: "pointer",
+                              fontFamily: "'Inter', 'Roboto', sans-serif", fontSize: 12, fontWeight: 600
+                            }}>Delete</button>
+                          )}
                         </div>
                       </div>
                     );

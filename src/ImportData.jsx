@@ -85,7 +85,13 @@ export default function ImportData({ onDone }) {
     setError('');
 
     try {
-      const storage = getStorage(userId);
+      // Import into the profile the user is currently on, if the feature is
+      // active. Falls back to null (no profile filtering) pre-migration.
+      const activeProfileId =
+        userId && userId !== 'local'
+          ? localStorage.getItem(`wht-v3-active-profile-${userId}`) || 'default'
+          : null;
+      const storage = getStorage(userId, activeProfileId);
 
       // Resolve data from either key format (storage keys or export wrapper keys)
       const timeData = rawJson['wht-v3-data'] || rawJson.data || null;
@@ -97,7 +103,7 @@ export default function ImportData({ onDone }) {
       // 1. Import time entries
       if (timeData && typeof timeData === 'object' && Object.keys(timeData).length > 0) {
         if (supabaseConfigured && userId !== 'local') {
-          await saveAllData(userId, timeData);
+          await saveAllData(userId, timeData, activeProfileId);
         } else {
           await storage.set('wht-v3-data', JSON.stringify(timeData));
         }
@@ -121,7 +127,7 @@ export default function ImportData({ onDone }) {
       // 5. Import tasks
       if (tasksData && Array.isArray(tasksData) && tasksData.length > 0) {
         if (supabaseConfigured && userId !== 'local') {
-          const result = await importTasks(userId, tasksData);
+          const result = await importTasks(userId, tasksData, activeProfileId);
           // eslint-disable-next-line no-console
           console.log(`Imported ${result.inserted} tasks to Supabase`);
         } else {

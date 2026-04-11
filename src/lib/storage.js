@@ -24,8 +24,13 @@ const local = {
 };
 
 // ── Supabase adapter ──
+//
+// When `profileId` is falsy the adapter behaves exactly as before the profiles
+// feature existed — no profile_id column is read or written. When `profileId`
+// is set, every query is scoped to (user_id, profile_id) and the upsert target
+// uses the composite key.
 
-function supa(userId) {
+function supa(userId, profileId = null) {
   return {
     async get(key) {
       const table = keyToTable(key);
@@ -34,11 +39,9 @@ function supa(userId) {
         // These are handled differently — return all rows
         return null;
       }
-      const { data } = await supabase
-        .from(table)
-        .select('*')
-        .eq('user_id', userId)
-        .single();
+      let q = supabase.from(table).select('*').eq('user_id', userId);
+      if (profileId) q = q.eq('profile_id', profileId);
+      const { data } = await q.maybeSingle();
       if (!data) return null;
       if (table === 'config') return { value: JSON.stringify(data.data) };
       if (table === 'settings')
@@ -55,54 +58,68 @@ function supa(userId) {
       const table = keyToTable(key);
       if (!table) return;
       const parsed = JSON.parse(value);
+      const onConflict = profileId ? 'user_id,profile_id' : 'user_id';
+      const withProfile = (row) => (profileId ? { ...row, profile_id: profileId } : row);
       if (table === 'config') {
-        await supabase.from('config').upsert({
-          user_id: userId,
-          data: parsed,
-          updated_at: new Date().toISOString(),
-        });
+        await supabase.from('config').upsert(
+          withProfile({
+            user_id: userId,
+            data: parsed,
+            updated_at: new Date().toISOString(),
+          }),
+          { onConflict },
+        );
       } else if (table === 'settings') {
-        await supabase.from('settings').upsert({
-          user_id: userId,
-          standard_hours: parsed.standardHours || 37.5,
-          defaults: parsed.defaults || {},
-          updated_at: new Date().toISOString(),
-        });
+        await supabase.from('settings').upsert(
+          withProfile({
+            user_id: userId,
+            standard_hours: parsed.standardHours || 37.5,
+            defaults: parsed.defaults || {},
+            updated_at: new Date().toISOString(),
+          }),
+          { onConflict },
+        );
       } else if (table === 'timer_state') {
         if (!parsed) {
-          await supabase.from('timer_state').upsert({
-            user_id: userId,
-            status: 'stopped',
-            start_time: null,
-            start_str: '',
-            elapsed: 0,
-            total_paused: 0,
-            pause_start: null,
-            note: '',
-            customer: '',
-            project: '',
-            work_order: '',
-            activity: '',
-            tags: [],
-            entry_id: null,
-          });
+          await supabase.from('timer_state').upsert(
+            withProfile({
+              user_id: userId,
+              status: 'stopped',
+              start_time: null,
+              start_str: '',
+              elapsed: 0,
+              total_paused: 0,
+              pause_start: null,
+              note: '',
+              customer: '',
+              project: '',
+              work_order: '',
+              activity: '',
+              tags: [],
+              entry_id: null,
+            }),
+            { onConflict },
+          );
         } else {
-          await supabase.from('timer_state').upsert({
-            user_id: userId,
-            status: parsed.status || 'stopped',
-            start_time: parsed.startTime || null,
-            start_str: parsed.startStr || '',
-            elapsed: 0,
-            total_paused: parsed.totalPaused || 0,
-            pause_start: parsed.pauseStart || null,
-            note: parsed.note || '',
-            customer: parsed.customer || '',
-            project: parsed.project || '',
-            work_order: parsed.workOrder || '',
-            activity: parsed.activity || '',
-            tags: parsed.tags || [],
-            entry_id: parsed.entryId || null,
-          });
+          await supabase.from('timer_state').upsert(
+            withProfile({
+              user_id: userId,
+              status: parsed.status || 'stopped',
+              start_time: parsed.startTime || null,
+              start_str: parsed.startStr || '',
+              elapsed: 0,
+              total_paused: parsed.totalPaused || 0,
+              pause_start: parsed.pauseStart || null,
+              note: parsed.note || '',
+              customer: parsed.customer || '',
+              project: parsed.project || '',
+              work_order: parsed.workOrder || '',
+              activity: parsed.activity || '',
+              tags: parsed.tags || [],
+              entry_id: parsed.entryId || null,
+            }),
+            { onConflict },
+          );
         }
       }
     },
@@ -138,12 +155,11 @@ function supaTimerToLocal(row) {
 
 // ── Supabase bulk data operations ──
 
-export async function loadAllData(userId) {
+export async function loadAllData(userId, profileId = null) {
   if (!supabaseConfigured || !userId) return null;
-  const { data: rows } = await supabase
-    .from('time_entries')
-    .select('*')
-    .eq('user_id', userId)
+  let q = supabase.from('time_entries').select('*').eq('user_id', userId);
+  if (profileId) q = q.eq('profile_id', profileId);
+  const { data: rows } = await q
     .order('week_key')
     .order('day_index')
     .order('start_time');
@@ -171,15 +187,18 @@ export async function loadAllData(userId) {
   return allData;
 }
 
-export async function saveAllData(userId, allData) {
+export async function saveAllData(userId, allData, profileId = null) {
   if (!supabaseConfigured || !userId) return;
-  // Delete all existing entries and re-insert
-  await supabase.from('time_entries').delete().eq('user_id', userId);
+  // Delete only entries in the target profile (or all entries when profiles
+  // are disabled) and re-insert.
+  let delQ = supabase.from('time_entries').delete().eq('user_id', userId);
+  if (profileId) delQ = delQ.eq('profile_id', profileId);
+  await delQ;
   const rows = [];
   for (const [weekKey, days] of Object.entries(allData)) {
     for (let di = 0; di < days.length; di++) {
       for (const ent of days[di] || []) {
-        rows.push({
+        const row = {
           id: ent.id,
           user_id: userId,
           week_key: weekKey,
@@ -197,7 +216,9 @@ export async function saveAllData(userId, allData) {
           recurring: ent.recurring || false,
           recur_frequency: ent.recurFrequency || '',
           task_id: ent.taskId || null,
-        });
+        };
+        if (profileId) row.profile_id = profileId;
+        rows.push(row);
       }
     }
   }
@@ -209,13 +230,11 @@ export async function saveAllData(userId, allData) {
   }
 }
 
-export async function loadTasks(userId) {
+export async function loadTasks(userId, profileId = null) {
   if (!supabaseConfigured || !userId) return null;
-  const { data: rows } = await supabase
-    .from('tasks')
-    .select('*')
-    .eq('user_id', userId)
-    .order('sort_order');
+  let q = supabase.from('tasks').select('*').eq('user_id', userId);
+  if (profileId) q = q.eq('profile_id', profileId);
+  const { data: rows } = await q.order('sort_order');
   if (!rows) return [];
   return rows.map((r) => ({
     id: r.id,
@@ -250,14 +269,14 @@ export async function loadTasks(userId) {
 
 // Build the Postgres row for a task. Dates are coerced to null on empty/invalid
 // values to avoid DATE cast errors on import.
-function taskToRow(t, i, userId) {
+function taskToRow(t, i, userId, profileId = null) {
   const toDate = (v) => {
     if (!v || typeof v !== 'string') return null;
     // Accept YYYY-MM-DD (with optional time suffix we strip)
     const m = v.match(/^(\d{4}-\d{2}-\d{2})/);
     return m ? m[1] : null;
   };
-  return {
+  const row = {
     id: t.id || (Date.now().toString(36) + Math.random().toString(36).slice(2, 8) + i),
     user_id: userId,
     title: t.title || '(untitled)',
@@ -288,6 +307,8 @@ function taskToRow(t, i, userId) {
     created_date: toDate(t.createdDate),
     sort_order: i,
   };
+  if (profileId) row.profile_id = profileId;
+  return row;
 }
 
 // Columns added by later migrations. If the target DB is on an older schema
@@ -317,11 +338,13 @@ function isMissingColumnError(error) {
   );
 }
 
-export async function saveTasks(userId, tasks) {
+export async function saveTasks(userId, tasks, profileId = null) {
   if (!supabaseConfigured || !userId) return;
-  const { error: delErr } = await supabase.from('tasks').delete().eq('user_id', userId);
+  let delQ = supabase.from('tasks').delete().eq('user_id', userId);
+  if (profileId) delQ = delQ.eq('profile_id', profileId);
+  const { error: delErr } = await delQ;
   if (delErr) throw new Error(`saveTasks delete failed: ${delErr.message}`);
-  const rows = tasks.map((t, i) => taskToRow(t, i, userId));
+  const rows = tasks.map((t, i) => taskToRow(t, i, userId, profileId));
   if (rows.length === 0) return;
   for (let i = 0; i < rows.length; i += 500) {
     const chunk = rows.slice(i, i + 500);
@@ -336,19 +359,19 @@ export async function saveTasks(userId, tasks) {
 
 // Non-destructive import: upsert so existing tasks aren't wiped if the batch
 // fails partway, and surfaces errors instead of swallowing them.
-export async function importTasks(userId, tasks) {
+export async function importTasks(userId, tasks, profileId = null) {
   if (!supabaseConfigured || !userId) {
     throw new Error('Supabase not configured or user not signed in');
   }
   if (!Array.isArray(tasks) || tasks.length === 0) return { inserted: 0 };
-  let rows = tasks.map((t, i) => taskToRow(t, i, userId));
+  let rows = tasks.map((t, i) => taskToRow(t, i, userId, profileId));
+
+  const onConflict = profileId ? 'user_id,profile_id,id' : 'user_id,id';
 
   // Probe once up-front: if the DB is on an older schema and is missing an
   // optional column, strip it from every row before we start batching.
   // (upsert is idempotent so re-processing row 0 in the main loop is fine.)
-  const probe = await supabase
-    .from('tasks')
-    .upsert([rows[0]], { onConflict: 'user_id,id' });
+  const probe = await supabase.from('tasks').upsert([rows[0]], { onConflict });
   if (isMissingColumnError(probe.error)) {
     rows = stripOptionalColumns(rows);
   }
@@ -357,24 +380,20 @@ export async function importTasks(userId, tasks) {
   const failures = [];
   for (let i = 0; i < rows.length; i += 100) {
     const chunk = rows.slice(i, i + 100);
-    let { error } = await supabase
-      .from('tasks')
-      .upsert(chunk, { onConflict: 'user_id,id' });
+    let { error } = await supabase.from('tasks').upsert(chunk, { onConflict });
     if (isMissingColumnError(error)) {
       ({ error } = await supabase
         .from('tasks')
-        .upsert(stripOptionalColumns(chunk), { onConflict: 'user_id,id' }));
+        .upsert(stripOptionalColumns(chunk), { onConflict }));
     }
     if (error) {
       // Fall back to one-by-one so a single bad row doesn't kill the whole batch
       for (const row of chunk) {
-        let r = await supabase
-          .from('tasks')
-          .upsert([row], { onConflict: 'user_id,id' });
+        let r = await supabase.from('tasks').upsert([row], { onConflict });
         if (isMissingColumnError(r.error)) {
           r = await supabase
             .from('tasks')
-            .upsert(stripOptionalColumns([row]), { onConflict: 'user_id,id' });
+            .upsert(stripOptionalColumns([row]), { onConflict });
         }
         if (r.error) {
           failures.push({ id: row.id, title: row.title, error: r.error.message });
@@ -494,11 +513,94 @@ export async function pruneBackups(userId, keepCount = 14) {
   await supabase.from('backups').delete().eq('user_id', userId).in('id', toDelete);
 }
 
+// ── Profiles (multi-profile support) ──
+//
+// A profile is a named bucket of (config, settings, tasks, time entries, timer).
+// Every query is scoped to (user_id, profile_id). The feature requires
+// migration 004_add_profiles.sql; functions here return null (or throw
+// ProfilesTableMissingError) when the table doesn't exist yet.
+
+export class ProfilesTableMissingError extends Error {
+  constructor(message) {
+    super(message);
+    this.name = 'ProfilesTableMissingError';
+  }
+}
+
+// Returns the list of profiles for the user, or null if the feature isn't
+// enabled yet (migration 004 not run). Never throws for the missing-table
+// case so callers can distinguish "not set up" from real errors.
+export async function listProfiles(userId) {
+  if (!supabaseConfigured || !userId) return null;
+  const { data, error } = await supabase
+    .from('profiles')
+    .select('*')
+    .eq('user_id', userId)
+    .order('created_at');
+  if (isMissingTableError(error)) return null;
+  if (error) throw new Error(`listProfiles failed: ${error.message}`);
+  return data || [];
+}
+
+// Ensures a "Default" profile exists for the user if they don't have one yet.
+// Returns the full list after any seeding. Null means the profiles table
+// doesn't exist — migration 004 needs to be run.
+export async function ensureDefaultProfile(userId) {
+  const existing = await listProfiles(userId);
+  if (existing === null) return null;
+  if (existing.length > 0) return existing;
+  const { error } = await supabase
+    .from('profiles')
+    .insert({ id: 'default', user_id: userId, name: 'Default' });
+  if (error && !/duplicate key/i.test(error.message)) {
+    throw new Error(`ensureDefaultProfile failed: ${error.message}`);
+  }
+  return [{ id: 'default', user_id: userId, name: 'Default' }];
+}
+
+export async function createProfile(userId, id, name) {
+  if (!supabaseConfigured || !userId) throw new Error('Not signed in');
+  const { error } = await supabase
+    .from('profiles')
+    .insert({ id, user_id: userId, name });
+  if (isMissingTableError(error)) {
+    throw new ProfilesTableMissingError(
+      'Profiles table does not exist. Run migration 004_add_profiles.sql in Supabase.',
+    );
+  }
+  if (error) throw new Error(`createProfile failed: ${error.message}`);
+  return { id, user_id: userId, name };
+}
+
+export async function renameProfile(userId, id, name) {
+  if (!supabaseConfigured || !userId) throw new Error('Not signed in');
+  const { error } = await supabase
+    .from('profiles')
+    .update({ name })
+    .eq('user_id', userId)
+    .eq('id', id);
+  if (error) throw new Error(`renameProfile failed: ${error.message}`);
+}
+
+// Deletes the profile and all data rows tagged with its id. Cascaded manually
+// across the data tables since there is no FK from those tables to profiles.
+export async function deleteProfile(userId, id) {
+  if (!supabaseConfigured || !userId) throw new Error('Not signed in');
+  if (id === 'default') {
+    throw new Error('The default profile cannot be deleted.');
+  }
+  for (const table of ['time_entries', 'tasks', 'config', 'settings', 'timer_state']) {
+    await supabase.from(table).delete().eq('user_id', userId).eq('profile_id', id);
+  }
+  const { error } = await supabase.from('profiles').delete().eq('user_id', userId).eq('id', id);
+  if (error) throw new Error(`deleteProfile failed: ${error.message}`);
+}
+
 // ── Public API ──
 
-export function getStorage(userId) {
+export function getStorage(userId, profileId = null) {
   if (supabaseConfigured && userId) {
-    return supa(userId);
+    return supa(userId, profileId);
   }
   return local;
 }
