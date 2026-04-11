@@ -1,7 +1,7 @@
 import { useState, useRef } from 'react';
 import { useAuth } from './lib/AuthContext';
 import { supabaseConfigured } from './lib/supabase';
-import { getStorage, saveAllData, saveTasks } from './lib/storage';
+import { getStorage, saveAllData, importTasks } from './lib/storage';
 
 export default function ImportData({ onDone }) {
   const { user } = useAuth();
@@ -121,7 +121,9 @@ export default function ImportData({ onDone }) {
       // 5. Import tasks
       if (tasksData && Array.isArray(tasksData) && tasksData.length > 0) {
         if (supabaseConfigured && userId !== 'local') {
-          await saveTasks(userId, tasksData);
+          const result = await importTasks(userId, tasksData);
+          // eslint-disable-next-line no-console
+          console.log(`Imported ${result.inserted} tasks to Supabase`);
         } else {
           await storage.set('wht-v3-tasks', JSON.stringify(tasksData));
         }
@@ -129,7 +131,9 @@ export default function ImportData({ onDone }) {
 
       setStatus('done');
     } catch (err) {
-      setError('Import failed: ' + (err.message || 'Unknown error'));
+      // eslint-disable-next-line no-console
+      console.error('Import failed:', err);
+      setError('Import failed: ' + (err?.message || 'Unknown error'));
       setStatus('error');
     }
   }

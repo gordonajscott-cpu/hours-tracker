@@ -248,16 +248,22 @@ export async function loadTasks(userId) {
   }));
 }
 
-export async function saveTasks(userId, tasks) {
-  if (!supabaseConfigured || !userId) return;
-  await supabase.from('tasks').delete().eq('user_id', userId);
-  const rows = tasks.map((t, i) => ({
-    id: t.id,
+// Build the Postgres row for a task. Dates are coerced to null on empty/invalid
+// values to avoid DATE cast errors on import.
+function taskToRow(t, i, userId) {
+  const toDate = (v) => {
+    if (!v || typeof v !== 'string') return null;
+    // Accept YYYY-MM-DD (with optional time suffix we strip)
+    const m = v.match(/^(\d{4}-\d{2}-\d{2})/);
+    return m ? m[1] : null;
+  };
+  return {
+    id: t.id || (Date.now().toString(36) + Math.random().toString(36).slice(2, 8) + i),
     user_id: userId,
-    title: t.title,
+    title: t.title || '(untitled)',
     importance: t.importance || 3,
-    due_date: t.dueDate || null,
-    start_date: t.startDate || null,
+    due_date: toDate(t.dueDate),
+    start_date: toDate(t.startDate),
     status: t.status || 'not_started',
     project: t.project || '',
     customer: t.customer || '',
@@ -270,23 +276,98 @@ export async function saveTasks(userId, tasks) {
     recur_frequency: t.recurFrequency || '',
     subtasks: t.subtasks || [],
     delegated_to: t.delegatedTo || '',
-    delegated_follow_up: t.delegatedFollowUp || null,
+    delegated_follow_up: toDate(t.delegatedFollowUp),
     blocked_by: t.blockedBy || null,
     effort_minutes: t.effortMinutes || 0,
-    scheduled_date: t.scheduledDate || null,
+    scheduled_date: toDate(t.scheduledDate),
     scheduled_start: t.scheduledStart || '',
     scheduled_end: t.scheduledEnd || '',
     do_now: t.doNow || false,
     urgent: t.urgent || false,
-    completed_date: t.completedDate || null,
-    created_date: t.createdDate || null,
+    completed_date: toDate(t.completedDate),
+    created_date: toDate(t.createdDate),
     sort_order: i,
-  }));
-  if (rows.length > 0) {
-    for (let i = 0; i < rows.length; i += 500) {
-      await supabase.from('tasks').insert(rows.slice(i, i + 500));
+  };
+}
+
+// Columns added by later migrations. If the target DB is on an older schema
+// (migration 002 not yet applied), we retry the insert with these columns
+// stripped so the rest of the task data still lands.
+const OPTIONAL_TASK_COLUMNS = ['start_date'];
+
+function stripOptionalColumns(rows) {
+  return rows.map((r) => {
+    const copy = { ...r };
+    for (const col of OPTIONAL_TASK_COLUMNS) delete copy[col];
+    return copy;
+  });
+}
+
+export async function saveTasks(userId, tasks) {
+  if (!supabaseConfigured || !userId) return;
+  const { error: delErr } = await supabase.from('tasks').delete().eq('user_id', userId);
+  if (delErr) throw new Error(`saveTasks delete failed: ${delErr.message}`);
+  const rows = tasks.map((t, i) => taskToRow(t, i, userId));
+  if (rows.length === 0) return;
+  for (let i = 0; i < rows.length; i += 500) {
+    const chunk = rows.slice(i, i + 500);
+    let { error } = await supabase.from('tasks').insert(chunk);
+    if (error && /column .* does not exist/i.test(error.message || '')) {
+      // Retry without columns from later migrations
+      ({ error } = await supabase.from('tasks').insert(stripOptionalColumns(chunk)));
+    }
+    if (error) throw new Error(`saveTasks insert failed: ${error.message}`);
+  }
+}
+
+// Non-destructive import: upsert so existing tasks aren't wiped if the batch
+// fails partway, and surfaces errors instead of swallowing them.
+export async function importTasks(userId, tasks) {
+  if (!supabaseConfigured || !userId) {
+    throw new Error('Supabase not configured or user not signed in');
+  }
+  if (!Array.isArray(tasks) || tasks.length === 0) return { inserted: 0 };
+  const rows = tasks.map((t, i) => taskToRow(t, i, userId));
+  let inserted = 0;
+  const failures = [];
+  for (let i = 0; i < rows.length; i += 100) {
+    const chunk = rows.slice(i, i + 100);
+    let { error } = await supabase
+      .from('tasks')
+      .upsert(chunk, { onConflict: 'user_id,id' });
+    if (error && /column .* does not exist/i.test(error.message || '')) {
+      ({ error } = await supabase
+        .from('tasks')
+        .upsert(stripOptionalColumns(chunk), { onConflict: 'user_id,id' }));
+    }
+    if (error) {
+      // Fall back to one-by-one so a single bad row doesn't kill the whole batch
+      for (const row of chunk) {
+        let r = await supabase
+          .from('tasks')
+          .upsert([row], { onConflict: 'user_id,id' });
+        if (r.error && /column .* does not exist/i.test(r.error.message || '')) {
+          r = await supabase
+            .from('tasks')
+            .upsert(stripOptionalColumns([row]), { onConflict: 'user_id,id' });
+        }
+        if (r.error) {
+          failures.push({ id: row.id, title: row.title, error: r.error.message });
+        } else {
+          inserted += 1;
+        }
+      }
+    } else {
+      inserted += chunk.length;
     }
   }
+  if (failures.length > 0) {
+    const sample = failures.slice(0, 3).map((f) => `"${f.title}": ${f.error}`).join('; ');
+    throw new Error(
+      `Imported ${inserted}/${rows.length} tasks. ${failures.length} failed. First errors: ${sample}`,
+    );
+  }
+  return { inserted };
 }
 
 // ── Public API ──
