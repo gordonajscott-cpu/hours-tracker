@@ -395,6 +395,105 @@ export async function importTasks(userId, tasks) {
   return { inserted };
 }
 
+// ── Backups (automatic snapshots) ──
+
+// Error thrown when the backups table hasn't been created yet. UI uses this
+// to show the migration instructions instead of a generic error.
+export class BackupsTableMissingError extends Error {
+  constructor(message) {
+    super(message);
+    this.name = 'BackupsTableMissingError';
+  }
+}
+
+function isMissingTableError(error) {
+  if (!error) return false;
+  const msg = (error.message || '') + ' ' + (error.code || '') + ' ' + (error.hint || '');
+  return (
+    /relation .* does not exist/i.test(msg) ||
+    /could not find the table/i.test(msg) ||
+    /PGRST205/i.test(msg)
+  );
+}
+
+function backupId() {
+  return Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+}
+
+export async function createBackup(userId, label, snapshot) {
+  if (!supabaseConfigured || !userId) {
+    throw new Error('Supabase not configured or user not signed in');
+  }
+  const json = JSON.stringify(snapshot);
+  const row = {
+    id: backupId(),
+    user_id: userId,
+    label: label || 'auto',
+    data: snapshot,
+    size_bytes: json.length,
+  };
+  const { error } = await supabase.from('backups').insert(row);
+  if (isMissingTableError(error)) {
+    throw new BackupsTableMissingError(
+      'Backups table does not exist. Run migration 003_add_backups_table.sql in Supabase.',
+    );
+  }
+  if (error) throw new Error(`createBackup failed: ${error.message}`);
+  return { id: row.id, created_at: new Date().toISOString(), label: row.label, size_bytes: row.size_bytes };
+}
+
+export async function listBackups(userId) {
+  if (!supabaseConfigured || !userId) return [];
+  const { data, error } = await supabase
+    .from('backups')
+    .select('id, created_at, label, size_bytes')
+    .eq('user_id', userId)
+    .order('created_at', { ascending: false });
+  if (isMissingTableError(error)) {
+    throw new BackupsTableMissingError(
+      'Backups table does not exist. Run migration 003_add_backups_table.sql in Supabase.',
+    );
+  }
+  if (error) throw new Error(`listBackups failed: ${error.message}`);
+  return data || [];
+}
+
+export async function getBackup(userId, id) {
+  if (!supabaseConfigured || !userId) throw new Error('Not signed in');
+  const { data, error } = await supabase
+    .from('backups')
+    .select('*')
+    .eq('user_id', userId)
+    .eq('id', id)
+    .single();
+  if (error) throw new Error(`getBackup failed: ${error.message}`);
+  return data;
+}
+
+export async function deleteBackup(userId, id) {
+  if (!supabaseConfigured || !userId) return;
+  const { error } = await supabase
+    .from('backups')
+    .delete()
+    .eq('user_id', userId)
+    .eq('id', id);
+  if (error) throw new Error(`deleteBackup failed: ${error.message}`);
+}
+
+// Keep the most recent `keepCount` backups, delete the rest.
+export async function pruneBackups(userId, keepCount = 14) {
+  if (!supabaseConfigured || !userId) return;
+  const { data, error } = await supabase
+    .from('backups')
+    .select('id')
+    .eq('user_id', userId)
+    .order('created_at', { ascending: false });
+  if (error || !data) return;
+  const toDelete = data.slice(keepCount).map((r) => r.id);
+  if (toDelete.length === 0) return;
+  await supabase.from('backups').delete().eq('user_id', userId).in('id', toDelete);
+}
+
 // ── Public API ──
 
 export function getStorage(userId) {

@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect, useCallback, useRef } from "react";
 import { useAuth } from "./lib/AuthContext";
-import { getStorage, loadAllData, saveAllData, loadTasks, saveTasks } from "./lib/storage";
+import { getStorage, loadAllData, saveAllData, loadTasks, saveTasks, createBackup, listBackups, getBackup, deleteBackup, pruneBackups, BackupsTableMissingError } from "./lib/storage";
 import { supabase, supabaseConfigured } from "./lib/supabase";
 
 const DAYS = ["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"];
@@ -1600,6 +1600,12 @@ export default function WorkHoursTracker({ onImport }) {
   const [tasks, setTasks] = useState([]);
   const [tasksLoaded, setTasksLoaded] = useState(false);
   const [tasksLoadError, setTasksLoadError] = useState("");
+  // Automatic backups
+  const [backups, setBackups] = useState([]);
+  const [backupsVersion, setBackupsVersion] = useState(0);
+  const [backupsTableMissing, setBackupsTableMissing] = useState(false);
+  const [backupBusy, setBackupBusy] = useState("");
+  const [didAutoBackup, setDidAutoBackup] = useState(false);
   const [taskFilter, setTaskFilter] = useState("all"); // all, not_started, in_progress, on_hold
   const [taskSort, setTaskSort] = useState("priority"); // priority, due, title
   const [taskDurationFilter, setTaskDurationFilter] = useState(0);
@@ -2648,6 +2654,153 @@ export default function WorkHoursTracker({ onImport }) {
     }, 600);
     return () => clearTimeout(t);
   }, [tasks, loading, tasksLoaded, userId, storageAdapter]);
+
+  // ── AUTOMATIC BACKUPS ──
+  // Snapshots the full state into the `backups` table once per 24h while the
+  // app is open. The last 14 snapshots are kept; older ones are pruned.
+  const AUTO_BACKUP_INTERVAL_MS = 24 * 60 * 60 * 1000;
+  const LAST_BACKUP_KEY = "wht-v3-last-auto-backup";
+  const BACKUP_KEEP_COUNT = 14;
+
+  const buildSnapshot = useCallback(() => ({
+    data: allData,
+    config,
+    settings: { standardHours, defaults },
+    tasks,
+    exportedAt: new Date().toISOString(),
+    version: "v3",
+  }), [allData, config, standardHours, defaults, tasks]);
+
+  // Load the list of existing backups once the app is ready
+  useEffect(() => {
+    if (loading || !tasksLoaded) return;
+    if (!supabaseConfigured || userId === "local") return;
+    let cancelled = false;
+    listBackups(userId)
+      .then(rows => { if (!cancelled) { setBackups(rows); setBackupsTableMissing(false); } })
+      .catch(err => {
+        if (err instanceof BackupsTableMissingError) {
+          if (!cancelled) setBackupsTableMissing(true);
+        } else {
+          console.error("listBackups failed:", err);
+        }
+      });
+    return () => { cancelled = true; };
+  }, [loading, tasksLoaded, userId, backupsVersion]);
+
+  // One-shot auto-backup per session, throttled to every 24h via localStorage
+  useEffect(() => {
+    if (loading || !tasksLoaded || didAutoBackup) return;
+    if (!supabaseConfigured || userId === "local") return;
+    const last = parseInt(localStorage.getItem(LAST_BACKUP_KEY) || "0", 10);
+    if (last && Date.now() - last < AUTO_BACKUP_INTERVAL_MS) {
+      setDidAutoBackup(true);
+      return;
+    }
+    const t = setTimeout(async () => {
+      try {
+        await createBackup(userId, "auto", buildSnapshot());
+        localStorage.setItem(LAST_BACKUP_KEY, Date.now().toString());
+        await pruneBackups(userId, BACKUP_KEEP_COUNT);
+        setBackupsVersion(v => v + 1);
+        setBackupsTableMissing(false);
+      } catch (err) {
+        if (err instanceof BackupsTableMissingError) {
+          setBackupsTableMissing(true);
+        } else {
+          console.error("Auto-backup failed:", err);
+        }
+      } finally {
+        setDidAutoBackup(true);
+      }
+    }, 4000);
+    return () => clearTimeout(t);
+  }, [loading, tasksLoaded, didAutoBackup, userId, buildSnapshot]);
+
+  async function backupNow() {
+    if (!supabaseConfigured || userId === "local") return;
+    setBackupBusy("creating");
+    try {
+      await createBackup(userId, "manual", buildSnapshot());
+      localStorage.setItem(LAST_BACKUP_KEY, Date.now().toString());
+      await pruneBackups(userId, BACKUP_KEEP_COUNT);
+      setBackupsVersion(v => v + 1);
+      setBackupsTableMissing(false);
+      setSaveStatus("backed up");
+      setTimeout(() => setSaveStatus(""), 2000);
+    } catch (err) {
+      if (err instanceof BackupsTableMissingError) {
+        setBackupsTableMissing(true);
+      } else {
+        console.error("backupNow failed:", err);
+        setSaveStatus("backup error");
+        setTimeout(() => setSaveStatus(""), 3000);
+      }
+    } finally {
+      setBackupBusy("");
+    }
+  }
+
+  async function downloadBackup(id) {
+    setBackupBusy(id);
+    try {
+      const b = await getBackup(userId, id);
+      const json = JSON.stringify(b.data, null, 2);
+      const blob = new Blob([json], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      const stamp = new Date(b.created_at).toISOString().replace(/[:.]/g, "-").slice(0, 19);
+      a.href = url;
+      a.download = `hours-tracker-backup-${stamp}.json`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error("downloadBackup failed:", err);
+      setSaveStatus("download error");
+      setTimeout(() => setSaveStatus(""), 3000);
+    } finally {
+      setBackupBusy("");
+    }
+  }
+
+  async function restoreBackup(id) {
+    if (!window.confirm("Restore this backup? This will overwrite your current data.")) return;
+    setBackupBusy(id);
+    try {
+      const b = await getBackup(userId, id);
+      const snap = b.data || {};
+      if (snap.data) setAllData(snap.data);
+      if (snap.config) setConfig(prev => ({ ...prev, ...snap.config }));
+      if (snap.settings) {
+        if (snap.settings.standardHours) setStandardHours(snap.settings.standardHours);
+        if (snap.settings.defaults) setDefaults(prev => ({ ...prev, ...snap.settings.defaults }));
+      }
+      if (Array.isArray(snap.tasks)) setTasks(snap.tasks);
+      setSaveStatus("restored");
+      setTimeout(() => setSaveStatus(""), 3000);
+    } catch (err) {
+      console.error("restoreBackup failed:", err);
+      setSaveStatus("restore error");
+      setTimeout(() => setSaveStatus(""), 3000);
+    } finally {
+      setBackupBusy("");
+    }
+  }
+
+  async function removeBackup(id) {
+    if (!window.confirm("Delete this backup?")) return;
+    setBackupBusy(id);
+    try {
+      await deleteBackup(userId, id);
+      setBackupsVersion(v => v + 1);
+    } catch (err) {
+      console.error("deleteBackup failed:", err);
+    } finally {
+      setBackupBusy("");
+    }
+  }
 
   // Compute live timer end for calendar display
   const timerLiveEnd = useMemo(() => {
@@ -8150,6 +8303,95 @@ export default function WorkHoursTracker({ onImport }) {
               }}>Export Timesheet (CSV)</button>
             </div>
           </div>
+
+          {/* Automatic Backups card (Supabase only) */}
+          {supabaseConfigured && userId !== "local" && (
+            <div style={{
+              background: "#ffffff", border: "1px solid #dadce0", borderRadius: 12,
+              padding: "18px 24px", marginTop: 16, boxShadow: "0 1px 3px rgba(0,0,0,0.08)"
+            }}>
+              <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
+                <div style={{ flex: "1 1 260px" }}>
+                  <div style={{ fontSize: 14, fontWeight: 600, color: "#202124" }}>☁️ Automatic Backups</div>
+                  <div style={{ fontSize: 12, color: "#80868b", marginTop: 2 }}>
+                    Daily cloud snapshot of all your data, up to {BACKUP_KEEP_COUNT} retained.
+                  </div>
+                </div>
+                {!backupsTableMissing && (
+                  <button onClick={backupNow} disabled={backupBusy === "creating"} style={{
+                    background: backupBusy === "creating" ? "#9aa0a6" : "#1a73e8",
+                    border: "none", color: "#ffffff", padding: "8px 18px",
+                    borderRadius: 20, cursor: backupBusy === "creating" ? "not-allowed" : "pointer",
+                    fontFamily: "'Inter', 'Roboto', sans-serif", fontSize: 13, fontWeight: 600
+                  }}>{backupBusy === "creating" ? "Backing up..." : "Back Up Now"}</button>
+                )}
+              </div>
+
+              {backupsTableMissing ? (
+                <div style={{
+                  marginTop: 14, padding: "14px 16px", background: "#fef7e0",
+                  border: "1px solid #feefc3", borderRadius: 8, fontSize: 13, color: "#5f4400"
+                }}>
+                  <div style={{ fontWeight: 600, marginBottom: 6 }}>Setup required</div>
+                  <div style={{ marginBottom: 8 }}>
+                    To enable automatic backups, run the migration
+                    <code style={{ background: "#fff5d6", padding: "1px 6px", borderRadius: 4, margin: "0 4px", fontFamily: "monospace", fontSize: 12 }}>
+                      003_add_backups_table.sql
+                    </code>
+                    in your Supabase SQL editor. Reload the app after the migration completes.
+                  </div>
+                </div>
+              ) : backups.length === 0 ? (
+                <div style={{ marginTop: 14, fontSize: 13, color: "#80868b" }}>
+                  No backups yet. Your first automatic backup will be created shortly, or click "Back Up Now".
+                </div>
+              ) : (
+                <div style={{ marginTop: 14, display: "flex", flexDirection: "column", gap: 8 }}>
+                  {backups.map(b => {
+                    const sizeKb = ((b.size_bytes || 0) / 1024).toFixed(1);
+                    const busy = backupBusy === b.id;
+                    return (
+                      <div key={b.id} style={{
+                        display: "flex", alignItems: "center", justifyContent: "space-between",
+                        gap: 12, flexWrap: "wrap",
+                        padding: "10px 14px", background: "#f8f9fa",
+                        border: "1px solid #e8eaed", borderRadius: 8
+                      }}>
+                        <div style={{ display: "flex", flexDirection: "column", gap: 2, minWidth: 0, flex: "1 1 240px" }}>
+                          <div style={{ fontSize: 13, fontWeight: 600, color: "#202124" }}>
+                            {new Date(b.created_at).toLocaleString()}
+                          </div>
+                          <div style={{ fontSize: 12, color: "#80868b" }}>
+                            {b.label === "manual" ? "Manual" : "Automatic"} · {sizeKb} KB
+                          </div>
+                        </div>
+                        <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                          <button onClick={() => downloadBackup(b.id)} disabled={busy} style={{
+                            background: "#ffffff", border: "1px solid #dadce0", color: "#1a73e8",
+                            padding: "6px 12px", borderRadius: 16,
+                            cursor: busy ? "not-allowed" : "pointer",
+                            fontFamily: "'Inter', 'Roboto', sans-serif", fontSize: 12, fontWeight: 600
+                          }}>Download</button>
+                          <button onClick={() => restoreBackup(b.id)} disabled={busy} style={{
+                            background: "#ffffff", border: "1px solid #dadce0", color: "#137333",
+                            padding: "6px 12px", borderRadius: 16,
+                            cursor: busy ? "not-allowed" : "pointer",
+                            fontFamily: "'Inter', 'Roboto', sans-serif", fontSize: 12, fontWeight: 600
+                          }}>Restore</button>
+                          <button onClick={() => removeBackup(b.id)} disabled={busy} style={{
+                            background: "#ffffff", border: "1px solid #dadce0", color: "#d93025",
+                            padding: "6px 12px", borderRadius: 16,
+                            cursor: busy ? "not-allowed" : "pointer",
+                            fontFamily: "'Inter', 'Roboto', sans-serif", fontSize: 12, fontWeight: 600
+                          }}>Delete</button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          )}
         </div>
       )}
 
