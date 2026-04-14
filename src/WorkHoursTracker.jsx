@@ -606,7 +606,9 @@ function TimeSel({ value, onChange, large }) {
 // Check if a config item is marked favourite
 function isFav(item) { return typeof item === "object" && item.favourite === true; }
 
-// Dropdown that shows favourites first with a star
+// Searchable dropdown that shows favourites first with a star. Behaves like a
+// native <select> (click to open, pick an option) but also supports typing to
+// filter — useful when the option list is long.
 function FavSel({ value, onChange, options, configItems, favouriteNames, placeholder, large, small }) {
   // configItems: raw config array with .favourite flag, OR favouriteNames: array of favourite name strings
   const items = configItems || [];
@@ -616,20 +618,134 @@ function FavSel({ value, onChange, options, configItems, favouriteNames, placeho
   const favOptions = (options || []).filter(o => favSet.has(o));
   const otherOptions = (options || []).filter(o => !favSet.has(o));
 
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState("");
+  const [focusIdx, setFocusIdx] = useState(-1);
+  const wrapRef = useRef(null);
+  const inputRef = useRef(null);
+
+  const q = query.trim().toLowerCase();
+  const filteredFav = q ? favOptions.filter(o => o.toLowerCase().includes(q)) : favOptions;
+  const filteredOther = q ? otherOptions.filter(o => o.toLowerCase().includes(q)) : otherOptions;
+  // Flat list used for keyboard navigation. "" is the "clear" sentinel.
+  const flat = [...filteredFav, ...filteredOther];
+
+  useEffect(() => {
+    if (!open) return;
+    function handleClick(e) { if (wrapRef.current && !wrapRef.current.contains(e.target)) { setOpen(false); setQuery(""); } }
+    document.addEventListener("mousedown", handleClick);
+    return () => document.removeEventListener("mousedown", handleClick);
+  }, [open]);
+
+  function openDropdown() {
+    setOpen(true);
+    setQuery("");
+    setFocusIdx(-1);
+    // Focus the input on next tick so it's immediately typeable
+    setTimeout(() => inputRef.current?.focus(), 0);
+  }
+
+  function pick(val) {
+    onChange(val);
+    setOpen(false);
+    setQuery("");
+    setFocusIdx(-1);
+  }
+
+  function handleKeyDown(e) {
+    if (e.key === "ArrowDown") { e.preventDefault(); setFocusIdx(i => Math.min(i + 1, flat.length - 1)); }
+    else if (e.key === "ArrowUp") { e.preventDefault(); setFocusIdx(i => Math.max(i - 1, 0)); }
+    else if (e.key === "Enter") {
+      e.preventDefault();
+      if (focusIdx >= 0 && focusIdx < flat.length) pick(flat[focusIdx]);
+      else if (flat.length === 1) pick(flat[0]);
+    }
+    else if (e.key === "Escape") { setOpen(false); setQuery(""); }
+    else if (e.key === "Tab") { setOpen(false); setQuery(""); }
+  }
+
+  const padding = large ? "14px 16px" : small ? "3px 20px 3px 8px" : "10px 12px";
+  const fontSize = large ? 20 : small ? 12 : 15;
+  const fieldStyle = {
+    background: "#ffffff", border: "1px solid #dadce0", color: value ? "#202124" : "#5f6368",
+    padding, borderRadius: 6, fontFamily: "'Inter', 'Roboto', sans-serif",
+    fontSize, width: "100%", outline: "none", cursor: "pointer", boxSizing: "border-box",
+  };
+  const display = value || placeholder || "— Select —";
+
+  // Build rendered option rows. favourites get a star prefix.
+  let idx = -1;
+  const renderOption = (o, isFavRow) => {
+    idx += 1;
+    const i = idx;
+    return (
+      <div key={(isFavRow ? "f-" : "o-") + o}
+        onMouseDown={e => { e.preventDefault(); pick(o); }}
+        onMouseEnter={() => setFocusIdx(i)}
+        style={{
+          padding: small ? "6px 10px" : "8px 12px", cursor: "pointer",
+          background: i === focusIdx ? "#e8f0fe" : "transparent",
+          fontSize: small ? 12 : 14, color: "#202124",
+        }}
+      >
+        {isFavRow ? "★ " : ""}{o}
+      </div>
+    );
+  };
+
   return (
-    <div style={{ position: "relative", width: small ? "auto" : "100%" }}>
-      <select value={value || ""} onChange={e => onChange(e.target.value)} style={{
-        background: "#ffffff", border: "1px solid #dadce0", color: value ? "#202124" : "#5f6368",
-        padding: large ? "14px 16px" : small ? "3px 20px 3px 8px" : "10px 12px", borderRadius: 6, fontFamily: "'Inter', 'Roboto', sans-serif",
-        fontSize: large ? 20 : small ? 12 : 15, width: small ? "auto" : "100%", outline: "none", cursor: "pointer", appearance: "none", WebkitAppearance: "none"
-      }}>
-        <option value="">{placeholder || "— Select —"}</option>
-        {favOptions.length > 0 && <option disabled style={{ fontSize: 11, color: "#80868b" }}>── Favourites ──</option>}
-        {favOptions.map(o => <option key={o} value={o}>★ {o}</option>)}
-        {favOptions.length > 0 && otherOptions.length > 0 && <option disabled style={{ fontSize: 11, color: "#80868b" }}>── All ──</option>}
-        {otherOptions.map(o => <option key={o} value={o}>{o}</option>)}
-      </select>
+    <div ref={wrapRef} style={{ position: "relative", width: small ? "auto" : "100%" }}>
+      {open ? (
+        <input ref={inputRef} type="text" value={query}
+          placeholder={value || placeholder || "Type to search…"}
+          onChange={e => { setQuery(e.target.value); setFocusIdx(e.target.value.trim() ? 0 : -1); }}
+          onKeyDown={handleKeyDown}
+          style={fieldStyle}
+        />
+      ) : (
+        <div onClick={openDropdown} tabIndex={0}
+          onKeyDown={e => { if (e.key === "Enter" || e.key === " " || e.key === "ArrowDown") { e.preventDefault(); openDropdown(); } }}
+          style={{
+            ...fieldStyle,
+            whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
+          }}
+        >
+          {display}
+        </div>
+      )}
       <div style={{ position: "absolute", right: small ? 4 : 10, top: "50%", transform: "translateY(-50%)", pointerEvents: "none", color: "#5f6368", fontSize: small ? 10 : 14 }}>▾</div>
+      {open && (
+        <div style={{
+          position: "absolute", top: "100%", left: 0, right: 0, marginTop: 4, zIndex: 30,
+          background: "#ffffff", border: "1px solid #dadce0", borderRadius: 8,
+          maxHeight: 240, overflowY: "auto", boxShadow: "0 4px 12px rgba(0,0,0,0.15)",
+          minWidth: small ? 180 : undefined,
+        }}>
+          {/* Clear option */}
+          <div onMouseDown={e => { e.preventDefault(); pick(""); }}
+            style={{
+              padding: small ? "6px 10px" : "8px 12px", cursor: "pointer",
+              fontSize: small ? 12 : 13, color: "#5f6368", fontStyle: "italic",
+              borderBottom: "1px solid #f1f3f4",
+            }}
+          >
+            {placeholder || "— Clear —"}
+          </div>
+          {filteredFav.length > 0 && (
+            <div style={{ padding: "4px 12px", fontSize: 11, color: "#80868b", background: "#fafafa" }}>Favourites</div>
+          )}
+          {filteredFav.map(o => renderOption(o, true))}
+          {filteredFav.length > 0 && filteredOther.length > 0 && (
+            <div style={{ padding: "4px 12px", fontSize: 11, color: "#80868b", background: "#fafafa" }}>All</div>
+          )}
+          {filteredOther.map(o => renderOption(o, false))}
+          {flat.length === 0 && (
+            <div style={{ padding: small ? "6px 10px" : "8px 12px", fontSize: small ? 12 : 13, color: "#80868b" }}>
+              No matches
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
