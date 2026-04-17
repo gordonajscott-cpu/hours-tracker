@@ -1,8 +1,39 @@
-import { useState } from 'react';
+import { useState, Component } from 'react';
 import { AuthProvider, useAuth } from './lib/AuthContext';
 import WorkHoursTracker from './WorkHoursTracker';
 import ImportData from './ImportData';
 import Login from './Login';
+
+class ErrorBoundary extends Component {
+  constructor(props) {
+    super(props);
+    this.state = { error: null, info: null };
+  }
+  static getDerivedStateFromError(error) {
+    return { error };
+  }
+  componentDidCatch(error, info) {
+    this.setState({ info });
+    console.error('ErrorBoundary caught:', error, info);
+  }
+  render() {
+    if (this.state.error) {
+      return (
+        <div style={{ padding: 40, fontFamily: 'monospace', maxWidth: 800, margin: '0 auto' }}>
+          <h2 style={{ color: '#d93025' }}>Something went wrong</h2>
+          <pre style={{ background: '#f8f9fa', padding: 16, borderRadius: 8, overflow: 'auto', fontSize: 13, border: '1px solid #dadce0' }}>
+            {this.state.error.toString()}
+            {this.state.info?.componentStack}
+          </pre>
+          <button onClick={() => window.location.reload()} style={{ marginTop: 16, padding: '10px 24px', background: '#1a73e8', color: '#fff', border: 'none', borderRadius: 8, cursor: 'pointer', fontSize: 14 }}>
+            Reload
+          </button>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
 
 function AppContent() {
   const { user, loading, supabaseConfigured } = useAuth();
@@ -32,7 +63,7 @@ function AppContent() {
     return <ImportData onDone={() => { window.location.hash = ''; setPage('app'); window.location.reload(); }} />;
   }
 
-  return <WorkHoursTracker onImport={() => { window.location.hash = '#import'; setPage('import'); }} />;
+  return <ErrorBoundary><WorkHoursTracker onImport={() => { window.location.hash = '#import'; setPage('import'); }} /></ErrorBoundary>;
 }
 
 export default function App() {
