@@ -2370,7 +2370,6 @@ export default function WorkHoursTracker({ onImport }) {
         }
       } catch (err) {
         console.error("Org probe failed:", err);
-        if (!cancelled) { setOrg(null); setOrgConfig(null); }
       }
     })();
     return () => { cancelled = true; };

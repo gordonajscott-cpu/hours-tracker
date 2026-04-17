@@ -621,7 +621,7 @@ export async function getMyOrg(userId) {
     .select('org_id, role, joined_at, organizations(id, name, invite_code, created_at)')
     .eq('user_id', userId);
   if (isMissingTableError(error)) return null;
-  if (error) return null;
+  if (error) { console.error("getMyOrg query failed:", error.message); return null; }
   if (!data || data.length === 0) return null;
   return data[0];
 }
