@@ -60,8 +60,9 @@ function supa(userId, profileId = null) {
       const parsed = JSON.parse(value);
       const onConflict = profileId ? 'user_id,profile_id' : 'user_id';
       const withProfile = (row) => (profileId ? { ...row, profile_id: profileId } : row);
+      let result;
       if (table === 'config') {
-        await supabase.from('config').upsert(
+        result = await supabase.from('config').upsert(
           withProfile({
             user_id: userId,
             data: parsed,
@@ -70,7 +71,7 @@ function supa(userId, profileId = null) {
           { onConflict },
         );
       } else if (table === 'settings') {
-        await supabase.from('settings').upsert(
+        result = await supabase.from('settings').upsert(
           withProfile({
             user_id: userId,
             standard_hours: parsed.standardHours || 37.5,
@@ -81,7 +82,7 @@ function supa(userId, profileId = null) {
         );
       } else if (table === 'timer_state') {
         if (!parsed) {
-          await supabase.from('timer_state').upsert(
+          result = await supabase.from('timer_state').upsert(
             withProfile({
               user_id: userId,
               status: 'stopped',
@@ -101,7 +102,7 @@ function supa(userId, profileId = null) {
             { onConflict },
           );
         } else {
-          await supabase.from('timer_state').upsert(
+          result = await supabase.from('timer_state').upsert(
             withProfile({
               user_id: userId,
               status: parsed.status || 'stopped',
@@ -122,6 +123,7 @@ function supa(userId, profileId = null) {
           );
         }
       }
+      if (result?.error) throw new Error(`storage.set(${key}) failed: ${result.error.message}`);
     },
   };
 }
@@ -189,11 +191,10 @@ export async function loadAllData(userId, profileId = null) {
 
 export async function saveAllData(userId, allData, profileId = null) {
   if (!supabaseConfigured || !userId) return;
-  // Delete only entries in the target profile (or all entries when profiles
-  // are disabled) and re-insert.
   let delQ = supabase.from('time_entries').delete().eq('user_id', userId);
   if (profileId) delQ = delQ.eq('profile_id', profileId);
-  await delQ;
+  const { error: delError } = await delQ;
+  if (delError) throw new Error(`saveAllData delete failed: ${delError.message}`);
   const rows = [];
   for (const [weekKey, days] of Object.entries(allData)) {
     for (let di = 0; di < days.length; di++) {
@@ -223,9 +224,9 @@ export async function saveAllData(userId, allData, profileId = null) {
     }
   }
   if (rows.length > 0) {
-    // Insert in batches of 500
     for (let i = 0; i < rows.length; i += 500) {
-      await supabase.from('time_entries').insert(rows.slice(i, i + 500));
+      const { error: insError } = await supabase.from('time_entries').insert(rows.slice(i, i + 500));
+      if (insError) throw new Error(`saveAllData insert failed: ${insError.message}`);
     }
   }
 }

@@ -1740,6 +1740,9 @@ export default function WorkHoursTracker({ onImport }) {
   const [orgMembers, setOrgMembers] = useState([]);
   const [orgConfig, setOrgConfig] = useState(null);
   const [orgVersion, setOrgVersion] = useState(0);
+  const [orgCreateName, setOrgCreateName] = useState('');
+  const [orgJoinCode, setOrgJoinCode] = useState('');
+  const [orgActionLoading, setOrgActionLoading] = useState(false);
   // Portfolio (requires migration 006)
   const [orgPortfolios, setOrgPortfolios] = useState([]);
   const [myPortfolioMemberships, setMyPortfolioMemberships] = useState([]);
@@ -2125,7 +2128,11 @@ export default function WorkHoursTracker({ onImport }) {
       setLastSaved(new Date());
       setSaveStatus("saved");
       setTimeout(() => setSaveStatus(""), 2000);
-    } catch (e) { setSaveStatus("error"); setTimeout(() => setSaveStatus(""), 3000); }
+    } catch (e) {
+      console.error("Save failed:", e);
+      setSaveStatus("error: " + (e?.message || "unknown"));
+      setTimeout(() => setSaveStatus(""), 8000);
+    }
   }, [userId, storageAdapter, effectiveProfileId]);
 
   const [showExport, setShowExport] = useState(null); // null or JSON string
@@ -2405,32 +2412,45 @@ export default function WorkHoursTracker({ onImport }) {
 
   // ── Organization action handlers ──
   async function handleCreateOrg() {
-    const name = window.prompt("Organization name:");
-    if (!name?.trim()) return;
+    if (!orgCreateName.trim()) return;
+    setOrgActionLoading(true);
     try {
-      const result = await createOrg(name.trim());
+      const result = await createOrg(orgCreateName.trim());
+      setOrg({
+        org_id: result.id,
+        role: 'admin',
+        organizations: { id: result.id, name: result.name, invite_code: result.invite_code }
+      });
+      setOrgMembers([{ user_id: userId, role: 'admin', display_name: user?.email || '' }]);
+      setOrgConfig({});
+      setOrgCreateName('');
       if (result?.id && activeProfileId) {
-        await linkProfileToOrg(userId, activeProfileId, result.id);
+        try { await linkProfileToOrg(userId, activeProfileId, result.id); } catch {}
         setProfilesVersion(v => v + 1);
       }
       setOrgVersion(v => v + 1);
     } catch (err) {
       alert("Could not create organization: " + (err?.message || "Unknown error"));
+    } finally {
+      setOrgActionLoading(false);
     }
   }
 
   async function handleJoinOrg() {
-    const code = window.prompt("Paste your organization invite code:");
-    if (!code?.trim()) return;
+    if (!orgJoinCode.trim()) return;
+    setOrgActionLoading(true);
     try {
-      const result = await joinOrg(code.trim());
+      const result = await joinOrg(orgJoinCode.trim());
+      setOrgJoinCode('');
       if (result?.org_id && activeProfileId) {
-        await linkProfileToOrg(userId, activeProfileId, result.org_id);
+        try { await linkProfileToOrg(userId, activeProfileId, result.org_id); } catch {}
         setProfilesVersion(v => v + 1);
       }
       setOrgVersion(v => v + 1);
     } catch (err) {
       alert("Could not join organization: " + (err?.message || "Unknown error"));
+    } finally {
+      setOrgActionLoading(false);
     }
   }
 
@@ -4645,8 +4665,8 @@ export default function WorkHoursTracker({ onImport }) {
           <div style={{ minWidth: 0, flex: isMobile ? 1 : "unset" }}>
             <h1 style={{ fontFamily: "'Inter', 'Roboto', sans-serif", fontSize: isMobile ? 17 : 22, fontWeight: 600, margin: 0, color: darkMode ? "#e0e0e0" : "#202124", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>Hours Tracker{!isMobile && <span style={{ fontSize: 11, fontWeight: 500, color: "#1a73e8", background: "#e8f0fe", padding: "2px 8px", borderRadius: 8, verticalAlign: "middle", marginLeft: 8 }}>V-Active</span>}</h1>
           </div>
-          {saveStatus && <span style={{ marginLeft: isMobile ? 0 : "auto", fontSize: isMobile ? 11 : 13, color: saveStatus === "error" || saveStatus.includes("error") ? "#d93025" : "#34a853", fontWeight: 500 }}>
-            {saveStatus === "saved" ? "✓ Saved" : saveStatus === "refreshing..." ? "↻" : saveStatus === "refreshed" ? "✓" : saveStatus === "imported" ? "✓ Imported" : saveStatus === "copied" ? "✓ Copied" : saveStatus.includes("error") ? "⚠" : "✓"}
+          {saveStatus && <span title={saveStatus.includes("error") ? saveStatus : ""} style={{ marginLeft: isMobile ? 0 : "auto", fontSize: isMobile ? 11 : 13, color: saveStatus.includes("error") ? "#d93025" : "#34a853", fontWeight: 500, maxWidth: isMobile ? 120 : 300, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+            {saveStatus === "saved" ? "✓ Saved" : saveStatus === "refreshing..." ? "↻" : saveStatus === "refreshed" ? "✓" : saveStatus === "imported" ? "✓ Imported" : saveStatus === "copied" ? "✓ Copied" : saveStatus.includes("error") ? `⚠ ${saveStatus}` : saveStatus === "restored" ? "✓ Restored" : "✓"}
           </span>}
           {!saveStatus && lastSaved && !isMobile && (
             <span style={{ marginLeft: "auto", fontSize: 12, color: "#80868b" }}>
@@ -8830,10 +8850,46 @@ export default function WorkHoursTracker({ onImport }) {
                     )}
                   </>
                 ) : (
-                  <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
-                    <button onClick={handleCreateOrg} style={{ padding: "10px 20px", background: "#7c3aed", color: "#fff", border: "none", borderRadius: 8, fontWeight: 600, cursor: "pointer" }}>Create Organization</button>
-                    <span style={{ color: "#5f6368", fontSize: 13 }}>or</span>
-                    <button onClick={handleJoinOrg} style={{ padding: "10px 20px", background: "#fff", color: "#7c3aed", border: "1px solid #c4b5fd", borderRadius: 8, fontWeight: 600, cursor: "pointer" }}>Join with Invite Code</button>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+                    <div>
+                      <div style={{ fontSize: 14, fontWeight: 600, color: "#202124", marginBottom: 8 }}>Create a new organization</div>
+                      <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                        <input
+                          type="text"
+                          placeholder="Organization name"
+                          value={orgCreateName}
+                          onChange={e => setOrgCreateName(e.target.value)}
+                          onKeyDown={e => e.key === 'Enter' && handleCreateOrg()}
+                          disabled={orgActionLoading}
+                          style={{ flex: 1, padding: "8px 12px", border: "1px solid #dadce0", borderRadius: 6, fontSize: 14, outline: "none" }}
+                        />
+                        <button onClick={handleCreateOrg} disabled={orgActionLoading || !orgCreateName.trim()} style={{ padding: "8px 20px", background: orgCreateName.trim() ? "#7c3aed" : "#c4b5fd", color: "#fff", border: "none", borderRadius: 6, fontWeight: 600, cursor: orgCreateName.trim() ? "pointer" : "default", opacity: orgActionLoading ? 0.6 : 1 }}>
+                          {orgActionLoading ? "Creating..." : "Create"}
+                        </button>
+                      </div>
+                    </div>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                      <div style={{ flex: 1, height: 1, background: "#dadce0" }} />
+                      <span style={{ color: "#5f6368", fontSize: 12, fontWeight: 600 }}>OR</span>
+                      <div style={{ flex: 1, height: 1, background: "#dadce0" }} />
+                    </div>
+                    <div>
+                      <div style={{ fontSize: 14, fontWeight: 600, color: "#202124", marginBottom: 8 }}>Join an existing organization</div>
+                      <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                        <input
+                          type="text"
+                          placeholder="Paste invite code"
+                          value={orgJoinCode}
+                          onChange={e => setOrgJoinCode(e.target.value)}
+                          onKeyDown={e => e.key === 'Enter' && handleJoinOrg()}
+                          disabled={orgActionLoading}
+                          style={{ flex: 1, padding: "8px 12px", border: "1px solid #dadce0", borderRadius: 6, fontSize: 14, outline: "none" }}
+                        />
+                        <button onClick={handleJoinOrg} disabled={orgActionLoading || !orgJoinCode.trim()} style={{ padding: "8px 20px", background: orgJoinCode.trim() ? "#7c3aed" : "#c4b5fd", color: "#fff", border: "none", borderRadius: 6, fontWeight: 600, cursor: orgJoinCode.trim() ? "pointer" : "default", opacity: orgActionLoading ? 0.6 : 1 }}>
+                          {orgActionLoading ? "Joining..." : "Join"}
+                        </button>
+                      </div>
+                    </div>
                   </div>
                 )}
               </div>
@@ -9525,6 +9581,12 @@ export default function WorkHoursTracker({ onImport }) {
             <span>Last saved {lastSaved.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", second: "2-digit" })}</span>
           </>
         )}
+        <span>·</span>
+        <button onClick={() => save(allData, config, standardHours, defaults)} style={{
+          background: "transparent", border: "none", color: "#1a73e8", cursor: "pointer",
+          fontFamily: "'Inter', 'Roboto', sans-serif", fontSize: 13, fontWeight: 600, padding: 0,
+          textDecoration: "underline"
+        }}>Save now</button>
         <span>·</span>
         <button onClick={refreshFromStorage} style={{
           background: "transparent", border: "none", color: "#1a73e8", cursor: "pointer",
