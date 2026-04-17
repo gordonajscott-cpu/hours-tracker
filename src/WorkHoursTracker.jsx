@@ -928,13 +928,13 @@ function AdminList({ title, items: rawItems, onUpdate, color, favourites, onTogg
       <div style={{ display: "flex", gap: 8, marginBottom: 14 }}>
         <input value={val} onChange={e => setVal(e.target.value)} onKeyDown={e => e.key === "Enter" && add()}
           placeholder={`Add ${title.toLowerCase()}...`}
-          style={{ flex: 1, background: "#ffffff", border: "1px solid #dadce0", color: "#202124", padding: "10px 12px", borderRadius: 6, fontFamily: "'Inter', 'Roboto', sans-serif", fontSize: 15, outline: "none" }} />
+          style={{ flex: 1, background: "#ffffff", border: "1px solid #dadce0", color: "#202124", padding: "7px 10px", borderRadius: 6, fontFamily: "'Inter', 'Roboto', sans-serif", fontSize: 13, outline: "none" }} />
         <button onClick={add} style={{
-          background: color || "#1a73e8", border: "none", color: "#ffffff", padding: "10px 16px",
-          borderRadius: 20, cursor: "pointer", fontFamily: "'Inter', 'Roboto', sans-serif", fontSize: 14, fontWeight: 700
+          background: color || "#1a73e8", border: "none", color: "#ffffff", padding: "7px 14px",
+          borderRadius: 16, cursor: "pointer", fontFamily: "'Inter', 'Roboto', sans-serif", fontSize: 13, fontWeight: 700
         }}>+</button>
       </div>
-      <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+      <div style={{ display: "flex", flexDirection: "column", gap: 2, maxHeight: 280, overflowY: "auto" }}>
         {items.length === 0 && <div style={{ fontSize: 13, color: "#80868b", fontStyle: "italic" }}>No {title.toLowerCase()} added yet</div>}
         {displayOrder.map(({ item, idx: i }, displayIdx) => {
           const isFavItem = favSet.has(item);
@@ -943,7 +943,7 @@ function AdminList({ title, items: rawItems, onUpdate, color, favourites, onTogg
           const showDivider = !isFavItem && displayIdx > 0 && favSet.has(displayOrder[displayIdx - 1]?.item);
           return (
           <React.Fragment key={item + i}>
-          {showDivider && <div style={{ height: 1, background: "#e8eaed", margin: "4px 0" }} />}
+          {showDivider && <div style={{ height: 1, background: "#e8eaed", margin: "2px 0" }} />}
           <div key={item + i}
             draggable={editIdx !== i}
             onDragStart={e => { setDragIdx(i); e.dataTransfer.effectAllowed = "move"; }}
@@ -951,8 +951,8 @@ function AdminList({ title, items: rawItems, onUpdate, color, favourites, onTogg
             onDrop={e => { e.preventDefault(); if (dragIdx !== null && dragIdx !== i) { moveItem(dragIdx, i); } setDragIdx(null); }}
             onDragEnd={() => setDragIdx(null)}
             style={{
-              display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 12px",
-              background: dragIdx === i ? "#e8f0fe" : isFavItem ? "#fffbeb" : "#ffffff", borderRadius: 6, gap: 8,
+              display: "flex", alignItems: "center", justifyContent: "space-between", padding: "5px 10px",
+              background: dragIdx === i ? "#e8f0fe" : isFavItem ? "#fffbeb" : "#ffffff", borderRadius: 5, gap: 6,
               opacity: dragIdx === i ? 0.5 : 1, cursor: editIdx === i ? "default" : "grab"
             }}>
             {editIdx === i ? (
@@ -978,7 +978,7 @@ function AdminList({ title, items: rawItems, onUpdate, color, favourites, onTogg
                   }}>▼</button>
                 </div>
                 {onToggleFav && <span onClick={() => onToggleFav(item)} style={{ cursor: "pointer", fontSize: 16, color: isFavItem ? "#fbbc04" : "#dadce0", flexShrink: 0 }} title={isFavItem ? "Remove from favourites" : "Add to favourites"}>{isFavItem ? "★" : "☆"}</span>}
-                <span onClick={() => startEdit(i)} style={{ fontSize: 15, color: "#202124", cursor: "pointer", flex: 1 }} title="Click to edit">{item}</span>
+                <span onClick={() => startEdit(i)} style={{ fontSize: 13, color: "#202124", cursor: "pointer", flex: 1 }} title="Click to edit">{item}</span>
                 {onSetCategory && (
                   <div style={{ display: "flex", gap: 3, flexShrink: 0 }}>
                     {["good", "bad"].map(c => (
@@ -1070,16 +1070,16 @@ function AdminCodeList({ title, items: rawItems, onUpdate, color }) {
       <div style={{ display: "flex", gap: 8, marginBottom: 14 }}>
         <input value={name} onChange={e => setName(e.target.value)} onKeyDown={e => e.key === "Enter" && add()}
           placeholder="Name..."
-          style={{ flex: 2, background: "#ffffff", border: "1px solid #dadce0", color: "#202124", padding: "10px 12px", borderRadius: 6, fontFamily: "'Inter', 'Roboto', sans-serif", fontSize: 15, outline: "none" }} />
+          style={{ flex: 2, background: "#ffffff", border: "1px solid #dadce0", color: "#202124", padding: "7px 10px", borderRadius: 6, fontFamily: "'Inter', 'Roboto', sans-serif", fontSize: 13, outline: "none" }} />
         <input value={code} onChange={e => setCode(e.target.value)} onKeyDown={e => e.key === "Enter" && add()}
           placeholder="Code..."
-          style={{ flex: 1, background: "#ffffff", border: "1px solid #dadce0", color: "#202124", padding: "10px 12px", borderRadius: 6, fontFamily: "'Inter', 'Roboto', sans-serif", fontSize: 15, outline: "none" }} />
+          style={{ flex: 1, background: "#ffffff", border: "1px solid #dadce0", color: "#202124", padding: "7px 10px", borderRadius: 6, fontFamily: "'Inter', 'Roboto', sans-serif", fontSize: 13, outline: "none" }} />
         <button onClick={add} style={{
-          background: color || "#1a73e8", border: "none", color: "#ffffff", padding: "10px 16px",
-          borderRadius: 20, cursor: "pointer", fontFamily: "'Inter', 'Roboto', sans-serif", fontSize: 14, fontWeight: 700
+          background: color || "#1a73e8", border: "none", color: "#ffffff", padding: "7px 14px",
+          borderRadius: 16, cursor: "pointer", fontFamily: "'Inter', 'Roboto', sans-serif", fontSize: 13, fontWeight: 700
         }}>+</button>
       </div>
-      <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+      <div style={{ display: "flex", flexDirection: "column", gap: 2, maxHeight: 280, overflowY: "auto" }}>
         {items.length === 0 && <div style={{ fontSize: 13, color: "#80868b", fontStyle: "italic" }}>No {title.toLowerCase()} added yet</div>}
         {displayOrder.map(({ item, idx: i }, displayIdx) => {
           const itemName = getItemName(item);
@@ -1088,14 +1088,14 @@ function AdminCodeList({ title, items: rawItems, onUpdate, color }) {
           const showDivider = !fav && displayIdx > 0 && isFav(displayOrder[displayIdx - 1]?.item);
           return (
             <React.Fragment key={itemName + i}>
-            {showDivider && <div style={{ height: 1, background: "#e8eaed", margin: "4px 0" }} />}
+            {showDivider && <div style={{ height: 1, background: "#e8eaed", margin: "2px 0" }} />}
             <div
               draggable={editIdx !== i}
               onDragStart={e => { setDragIdx(i); e.dataTransfer.effectAllowed = "move"; }}
               onDragOver={e => e.preventDefault()}
               onDrop={e => { e.preventDefault(); if (dragIdx !== null && dragIdx !== i) moveItem(dragIdx, i); setDragIdx(null); }}
               onDragEnd={() => setDragIdx(null)}
-              style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "8px 12px", background: dragIdx === i ? "#e8f0fe" : fav ? "#fffbeb" : "#ffffff", borderRadius: 6, gap: 8, opacity: dragIdx === i ? 0.5 : 1, cursor: editIdx === i ? "default" : "grab" }}>
+              style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "5px 10px", background: dragIdx === i ? "#e8f0fe" : fav ? "#fffbeb" : "#ffffff", borderRadius: 5, gap: 6, opacity: dragIdx === i ? 0.5 : 1, cursor: editIdx === i ? "default" : "grab" }}>
               {editIdx === i ? (
                 <div style={{ flex: 1, display: "flex", gap: 6 }}>
                   <input value={editName} onChange={e => setEditName(e.target.value)}
@@ -1117,7 +1117,7 @@ function AdminCodeList({ title, items: rawItems, onUpdate, color }) {
                   </div>
                   <span onClick={() => toggleFav(i)} style={{ cursor: "pointer", fontSize: 16, color: fav ? "#fbbc04" : "#dadce0", flexShrink: 0 }} title={fav ? "Remove from favourites" : "Add to favourites"}>{fav ? "★" : "☆"}</span>
                   <div onClick={() => startEdit(i)} style={{ cursor: "pointer", flex: 1 }} title="Click to edit">
-                    <span style={{ fontSize: 15, color: "#202124" }}>{itemName}</span>
+                    <span style={{ fontSize: 13, color: "#202124" }}>{itemName}</span>
                     {itemCode && <span style={{ fontSize: 13, color: "#80868b", marginLeft: 8 }}>({itemCode})</span>}
                   </div>
                   {confirmIdx === i ? (
@@ -1204,14 +1204,14 @@ function ActivityTemplateEditor({ templates, onUpdate, color, favouriteActivitie
       <div style={{ display: "flex", gap: 8, marginBottom: 14 }}>
         <input value={newName} onChange={e => setNewName(e.target.value)} onKeyDown={e => e.key === "Enter" && addTemplate()}
           placeholder="New template name..."
-          style={{ flex: 1, background: "#ffffff", border: "1px solid #dadce0", color: "#202124", padding: "10px 12px", borderRadius: 6, fontFamily: "'Inter', 'Roboto', sans-serif", fontSize: 15, outline: "none" }} />
+          style={{ flex: 1, background: "#ffffff", border: "1px solid #dadce0", color: "#202124", padding: "7px 10px", borderRadius: 6, fontFamily: "'Inter', 'Roboto', sans-serif", fontSize: 13, outline: "none" }} />
         <button onClick={addTemplate} style={{
           background: color || "#8b5cf6", border: "none", color: "#ffffff", padding: "10px 16px",
           borderRadius: 20, cursor: "pointer", fontFamily: "'Inter', 'Roboto', sans-serif", fontSize: 14, fontWeight: 700
         }}>+ Template</button>
       </div>
       {templates.length === 0 && <div style={{ fontSize: 13, color: "#80868b", fontStyle: "italic" }}>No activity templates yet. Create one and assign it to projects.</div>}
-      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+      <div style={{ display: "flex", flexDirection: "column", gap: 6, maxHeight: 400, overflowY: "auto" }}>
         {templates.map((tmpl, tIdx) => (
           <div key={tmpl.name} style={{ border: "1px solid #dadce0", borderRadius: 10, overflow: "hidden" }}>
             {/* Template header */}
@@ -1361,10 +1361,10 @@ function ProjectEditor({ items: rawItems, templates, customers, onUpdate, color 
       <div style={{ display: "flex", gap: 8, marginBottom: 14, flexWrap: "wrap" }}>
         <input value={name} onChange={e => setName(e.target.value)} onKeyDown={e => e.key === "Enter" && add()}
           placeholder="Name..."
-          style={{ flex: 2, minWidth: 120, background: "#ffffff", border: "1px solid #dadce0", color: "#202124", padding: "10px 12px", borderRadius: 6, fontFamily: "'Inter', 'Roboto', sans-serif", fontSize: 15, outline: "none" }} />
+          style={{ flex: 2, minWidth: 120, background: "#ffffff", border: "1px solid #dadce0", color: "#202124", padding: "7px 10px", borderRadius: 6, fontFamily: "'Inter', 'Roboto', sans-serif", fontSize: 13, outline: "none" }} />
         <input value={code} onChange={e => setCode(e.target.value)} onKeyDown={e => e.key === "Enter" && add()}
           placeholder="Code..."
-          style={{ flex: 1, minWidth: 80, background: "#ffffff", border: "1px solid #dadce0", color: "#202124", padding: "10px 12px", borderRadius: 6, fontFamily: "'Inter', 'Roboto', sans-serif", fontSize: 15, outline: "none" }} />
+          style={{ flex: 1, minWidth: 80, background: "#ffffff", border: "1px solid #dadce0", color: "#202124", padding: "7px 10px", borderRadius: 6, fontFamily: "'Inter', 'Roboto', sans-serif", fontSize: 13, outline: "none" }} />
         <select value={cust} onChange={e => setCust(e.target.value)}
           style={{ flex: 1, minWidth: 120, background: "#ffffff", border: "1px solid #dadce0", color: cust ? "#202124" : "#80868b", padding: "10px 12px", borderRadius: 6, fontFamily: "'Inter', 'Roboto', sans-serif", fontSize: 14, outline: "none", cursor: "pointer" }}>
           <option value="">Customer...</option>
@@ -1380,7 +1380,7 @@ function ProjectEditor({ items: rawItems, templates, customers, onUpdate, color 
           borderRadius: 20, cursor: "pointer", fontFamily: "'Inter', 'Roboto', sans-serif", fontSize: 14, fontWeight: 700
         }}>+</button>
       </div>
-      <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+      <div style={{ display: "flex", flexDirection: "column", gap: 2, maxHeight: 320, overflowY: "auto" }}>
         {items.length === 0 && <div style={{ fontSize: 13, color: "#80868b", fontStyle: "italic" }}>No projects added yet</div>}
         {displayOrder.map(({ item, idx: i }, displayIdx) => {
           const itemName = getItemName(item);
@@ -1391,13 +1391,13 @@ function ProjectEditor({ items: rawItems, templates, customers, onUpdate, color 
           const showDivider = !fav && displayIdx > 0 && isFav(displayOrder[displayIdx - 1]?.item);
           return (
             <React.Fragment key={itemName + i}>
-            {showDivider && <div style={{ height: 1, background: "#e8eaed", margin: "4px 0" }} />}
+            {showDivider && <div style={{ height: 1, background: "#e8eaed", margin: "2px 0" }} />}
             <div draggable={editIdx !== i}
               onDragStart={e => { setDragIdx(i); e.dataTransfer.effectAllowed = "move"; }}
               onDragOver={e => e.preventDefault()}
               onDrop={e => { e.preventDefault(); if (dragIdx !== null && dragIdx !== i) moveItem(dragIdx, i); setDragIdx(null); }}
               onDragEnd={() => setDragIdx(null)}
-              style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 12px", background: dragIdx === i ? "#e8f0fe" : fav ? "#fffbeb" : "#ffffff", borderRadius: 6, flexWrap: "wrap", opacity: dragIdx === i ? 0.5 : 1, cursor: editIdx === i ? "default" : "grab" }}>
+              style={{ display: "flex", alignItems: "center", gap: 6, padding: "5px 10px", background: dragIdx === i ? "#e8f0fe" : fav ? "#fffbeb" : "#ffffff", borderRadius: 5, flexWrap: "wrap", opacity: dragIdx === i ? 0.5 : 1, cursor: editIdx === i ? "default" : "grab" }}>
               <div style={{ display: "flex", flexDirection: "column", gap: 1, flexShrink: 0 }}>
                 <button onClick={() => moveItem(i, i - 1)} disabled={i === 0} style={{ background: "transparent", border: "none", color: i === 0 ? "#e8eaed" : "#80868b", cursor: i === 0 ? "default" : "pointer", fontSize: 10, padding: 0, lineHeight: 1 }}>▲</button>
                 <button onClick={() => moveItem(i, i + 1)} disabled={i === items.length - 1} style={{ background: "transparent", border: "none", color: i === items.length - 1 ? "#e8eaed" : "#80868b", cursor: i === items.length - 1 ? "default" : "pointer", fontSize: 10, padding: 0, lineHeight: 1 }}>▼</button>
@@ -1517,10 +1517,10 @@ function WorkOrderEditor({ items: rawItems, projects, onUpdate, color }) {
       <div style={{ display: "flex", gap: 8, marginBottom: 14, flexWrap: "wrap" }}>
         <input value={name} onChange={e => setName(e.target.value)} onKeyDown={e => e.key === "Enter" && add()}
           placeholder="Name..."
-          style={{ flex: 2, minWidth: 120, background: "#ffffff", border: "1px solid #dadce0", color: "#202124", padding: "10px 12px", borderRadius: 6, fontFamily: "'Inter', 'Roboto', sans-serif", fontSize: 15, outline: "none" }} />
+          style={{ flex: 2, minWidth: 120, background: "#ffffff", border: "1px solid #dadce0", color: "#202124", padding: "7px 10px", borderRadius: 6, fontFamily: "'Inter', 'Roboto', sans-serif", fontSize: 13, outline: "none" }} />
         <input value={code} onChange={e => setCode(e.target.value)} onKeyDown={e => e.key === "Enter" && add()}
           placeholder="Code..."
-          style={{ flex: 1, minWidth: 80, background: "#ffffff", border: "1px solid #dadce0", color: "#202124", padding: "10px 12px", borderRadius: 6, fontFamily: "'Inter', 'Roboto', sans-serif", fontSize: 15, outline: "none" }} />
+          style={{ flex: 1, minWidth: 80, background: "#ffffff", border: "1px solid #dadce0", color: "#202124", padding: "7px 10px", borderRadius: 6, fontFamily: "'Inter', 'Roboto', sans-serif", fontSize: 13, outline: "none" }} />
         <select value={proj} onChange={e => setProj(e.target.value)}
           style={{ flex: 1, minWidth: 120, background: "#ffffff", border: "1px solid #dadce0", color: proj ? "#202124" : "#80868b", padding: "10px 12px", borderRadius: 6, fontFamily: "'Inter', 'Roboto', sans-serif", fontSize: 14, outline: "none", cursor: "pointer" }}>
           <option value="">Project...</option>
@@ -1531,7 +1531,7 @@ function WorkOrderEditor({ items: rawItems, projects, onUpdate, color }) {
           borderRadius: 20, cursor: "pointer", fontFamily: "'Inter', 'Roboto', sans-serif", fontSize: 14, fontWeight: 700
         }}>+</button>
       </div>
-      <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+      <div style={{ display: "flex", flexDirection: "column", gap: 2, maxHeight: 320, overflowY: "auto" }}>
         {items.length === 0 && <div style={{ fontSize: 13, color: "#80868b", fontStyle: "italic" }}>No work orders added yet</div>}
         {displayOrder.map(({ item, idx: i }, displayIdx) => {
           const itemName = getItemName(item);
@@ -1541,13 +1541,13 @@ function WorkOrderEditor({ items: rawItems, projects, onUpdate, color }) {
           const showDivider = !fav && displayIdx > 0 && isFav(displayOrder[displayIdx - 1]?.item);
           return (
             <React.Fragment key={itemName + i}>
-            {showDivider && <div style={{ height: 1, background: "#e8eaed", margin: "4px 0" }} />}
+            {showDivider && <div style={{ height: 1, background: "#e8eaed", margin: "2px 0" }} />}
             <div draggable={editIdx !== i}
               onDragStart={e => { setDragIdx(i); e.dataTransfer.effectAllowed = "move"; }}
               onDragOver={e => e.preventDefault()}
               onDrop={e => { e.preventDefault(); if (dragIdx !== null && dragIdx !== i) moveItem(dragIdx, i); setDragIdx(null); }}
               onDragEnd={() => setDragIdx(null)}
-              style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 12px", background: dragIdx === i ? "#e8f0fe" : fav ? "#fffbeb" : "#ffffff", borderRadius: 6, flexWrap: "wrap", opacity: dragIdx === i ? 0.5 : 1, cursor: editIdx === i ? "default" : "grab" }}>
+              style={{ display: "flex", alignItems: "center", gap: 6, padding: "5px 10px", background: dragIdx === i ? "#e8f0fe" : fav ? "#fffbeb" : "#ffffff", borderRadius: 5, flexWrap: "wrap", opacity: dragIdx === i ? 0.5 : 1, cursor: editIdx === i ? "default" : "grab" }}>
               {editIdx === i ? (
                 <div style={{ flex: 1, display: "flex", gap: 6 }}>
                   <input value={editName} onChange={e => setEditName(e.target.value)}
@@ -1567,7 +1567,7 @@ function WorkOrderEditor({ items: rawItems, projects, onUpdate, color }) {
                   </div>
                   <span onClick={() => toggleFav(i)} style={{ cursor: "pointer", fontSize: 16, color: fav ? "#fbbc04" : "#dadce0", flexShrink: 0 }} title={fav ? "Remove from favourites" : "Add to favourites"}>{fav ? "★" : "☆"}</span>
                   <div onClick={() => startEdit(i)} style={{ flex: "1 1 auto", minWidth: 100, cursor: "pointer" }} title="Click to edit">
-                    <span style={{ fontSize: 15, color: "#202124" }}>{itemName}</span>
+                    <span style={{ fontSize: 13, color: "#202124" }}>{itemName}</span>
                     {itemCode && <span style={{ fontSize: 13, color: "#80868b", marginLeft: 8 }}>({itemCode})</span>}
                   </div>
                   <select value={itemProj} onChange={e => updateField(i, "project", e.target.value)}
