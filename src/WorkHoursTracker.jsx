@@ -3376,7 +3376,18 @@ export default function WorkHoursTracker({ onImport }) {
       const b = await getBackup(userId, id);
       const snap = b.data || {};
       if (snap.data) setAllData(snap.data);
-      if (snap.config) setConfig(prev => ({ ...prev, ...snap.config }));
+      if (snap.config) {
+        setConfig(prev => ({ ...prev, ...snap.config }));
+        if (isOrgProfile && isOrgAdmin && orgId) {
+          const orgFields = {};
+          for (const key of ['customers', 'projects', 'workOrders', 'activities', 'activityTemplates', 'roles', 'billRates', 'tags']) {
+            if (snap.config[key]) orgFields[key] = snap.config[key];
+          }
+          if (Object.keys(orgFields).length > 0) {
+            setOrgConfig(prev => ({ ...(prev || {}), ...orgFields }));
+          }
+        }
+      }
       if (snap.settings) {
         if (snap.settings.standardHours) setStandardHours(snap.settings.standardHours);
         if (snap.settings.defaults) setDefaults(prev => ({ ...prev, ...snap.settings.defaults }));
