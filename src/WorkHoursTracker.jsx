@@ -3067,8 +3067,7 @@ export default function WorkHoursTracker({ onImport }) {
     return found ? getItemLabel(found) : name;
   }
 
-  // Get activities for a project (from its template), fallback to global activities
-  function getActivitiesForProject(projectName) {
+  const getActivitiesForProject = (projectName) => {
     if (projectName) {
       const proj = (activeConfig.projects || []).find(p => getItemName(p) === projectName);
       if (proj && typeof proj === "object" && proj.activityTemplate) {
@@ -3077,27 +3076,27 @@ export default function WorkHoursTracker({ onImport }) {
       }
     }
     return activeConfig.activities || [];
-  }
+  };
 
-  function getProjectsForCustomer(customerName) {
+  const getProjectsForCustomer = (customerName) => {
     const allProjects = getItemNames(activeConfig.projects);
     if (!customerName) return allProjects;
     const filtered = (activeConfig.projects || [])
       .filter(p => typeof p === "object" && p.customer === customerName)
       .map(getItemName);
     return filtered.length > 0 ? filtered : allProjects;
-  }
+  };
 
-  function getWorkOrdersForProject(projectName) {
+  const getWorkOrdersForProject = (projectName) => {
     const allWOs = getItemNames(activeConfig.workOrders);
     if (!projectName) return allWOs;
     const filtered = (activeConfig.workOrders || [])
       .filter(wo => typeof wo === "object" && wo.project === projectName)
       .map(getItemName);
     return filtered.length > 0 ? filtered : allWOs;
-  }
+  };
 
-  function lookupWorkOrderChain(woName) {
+  const lookupWorkOrderChain = (woName) => {
     const wo = (activeConfig.workOrders || []).find(w => getItemName(w) === woName);
     const projectName = wo && typeof wo === "object" ? (wo.project || "") : "";
     let customerName = "";
@@ -3106,7 +3105,7 @@ export default function WorkHoursTracker({ onImport }) {
       customerName = proj && typeof proj === "object" ? (proj.customer || "") : "";
     }
     return { project: projectName, customer: customerName };
-  }
+  };
 
   // ═══ REPORTS ═══
   const reportData = useMemo(() => {
