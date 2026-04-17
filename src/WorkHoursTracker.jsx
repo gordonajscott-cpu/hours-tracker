@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect, useCallback, useRef } from "react";
 import { useAuth } from "./lib/AuthContext";
-import { getStorage, loadAllData, saveAllData, loadTasks, saveTasks, createBackup, listBackups, getBackup, deleteBackup, pruneBackups, BackupsTableMissingError, ensureDefaultProfile, createProfile, renameProfile, deleteProfile, ProfilesTableMissingError, createOrg, joinOrg, getMyOrg, getOrgMembers, updateMemberRole, removeMember, regenerateInviteCode, loadOrgConfig, saveOrgConfig, linkProfileToOrg, unlinkProfileFromOrg, leaveOrg, createPortfolio, listOrgPortfolios, deletePortfolio, renamePortfolio, addPortfolioMember, removePortfolioMember, getPortfolioMembers, updatePortfolioMemberRole, getMyPortfolios, loadPortfolioEntries, loadPortfolioTasks } from "./lib/storage";
+import { getStorage, loadAllData, saveAllData, loadTasks, saveTasks, createBackup, listBackups, getBackup, deleteBackup, pruneBackups, BackupsTableMissingError, ensureDefaultProfile, createProfile, renameProfile, deleteProfile, ProfilesTableMissingError, createOrg, joinOrg, getMyOrg, getOrgMembers, updateMemberRole, removeMember, regenerateInviteCode, updateMyDisplayName, loadOrgConfig, saveOrgConfig, linkProfileToOrg, unlinkProfileFromOrg, leaveOrg, createPortfolio, listOrgPortfolios, deletePortfolio, renamePortfolio, addPortfolioMember, removePortfolioMember, getPortfolioMembers, updatePortfolioMemberRole, getMyPortfolios, loadPortfolioEntries, loadPortfolioTasks } from "./lib/storage";
 import { supabase, supabaseConfigured } from "./lib/supabase";
 
 const DAYS = ["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"];
@@ -1743,6 +1743,9 @@ export default function WorkHoursTracker({ onImport }) {
   const [orgCreateName, setOrgCreateName] = useState('');
   const [orgJoinCode, setOrgJoinCode] = useState('');
   const [orgActionLoading, setOrgActionLoading] = useState(false);
+  const [displayNameDraft, setDisplayNameDraft] = useState('');
+  const [displayNameSaving, setDisplayNameSaving] = useState(false);
+  const [newPortfolioName, setNewPortfolioName] = useState('');
   // Portfolio (requires migration 006)
   const [orgPortfolios, setOrgPortfolios] = useState([]);
   const [myPortfolioMemberships, setMyPortfolioMemberships] = useState([]);
@@ -2358,6 +2361,7 @@ export default function WorkHoursTracker({ onImport }) {
         if (cancelled) return;
         if (!membership) { setOrg(null); setOrgConfig(null); return; }
         setOrg(membership);
+        setDisplayNameDraft(prev => prev || membership.display_name || '');
         const oid = membership.organizations?.id;
         if (oid) {
           const [members, oc] = await Promise.all([
@@ -2367,6 +2371,8 @@ export default function WorkHoursTracker({ onImport }) {
           if (cancelled) return;
           setOrgMembers(members || []);
           setOrgConfig(oc || {});
+          const me = (members || []).find(m => m.user_id === userId);
+          if (me?.display_name) setDisplayNameDraft(prev => prev || me.display_name);
         }
       } catch (err) {
         console.error("Org probe failed:", err);
@@ -2453,6 +2459,19 @@ export default function WorkHoursTracker({ onImport }) {
     }
   }
 
+  async function handleSaveDisplayName() {
+    if (!orgId || !displayNameDraft.trim()) return;
+    setDisplayNameSaving(true);
+    try {
+      await updateMyDisplayName(orgId, userId, displayNameDraft.trim());
+      setOrgMembers(prev => prev.map(m => m.user_id === userId ? { ...m, display_name: displayNameDraft.trim() } : m));
+    } catch (err) {
+      alert("Could not update name: " + (err?.message || "Unknown error"));
+    } finally {
+      setDisplayNameSaving(false);
+    }
+  }
+
   async function handleLeaveOrg() {
     if (!orgId) return;
     if (!window.confirm("Leave this organization? Your profiles will be unlinked.")) return;
@@ -2522,11 +2541,10 @@ export default function WorkHoursTracker({ onImport }) {
 
   // ── Portfolio action handlers ──
   async function handleCreatePortfolio() {
-    if (!orgId) return;
-    const name = window.prompt("Portfolio name:");
-    if (!name?.trim()) return;
+    if (!orgId || !newPortfolioName.trim()) return;
     try {
-      await createPortfolio(orgId, name.trim());
+      await createPortfolio(orgId, newPortfolioName.trim());
+      setNewPortfolioName('');
       setOrgVersion(v => v + 1);
     } catch (err) {
       alert("Could not create portfolio: " + (err?.message || ""));
@@ -8783,6 +8801,28 @@ export default function WorkHoursTracker({ onImport }) {
                       </div>
                       <button onClick={handleLeaveOrg} style={{ fontSize: 12, padding: "6px 14px", background: "#fce8e6", color: "#d93025", border: "none", borderRadius: 6, cursor: "pointer", fontWeight: 600 }}>Leave</button>
                     </div>
+                    <div style={{ marginBottom: 16, padding: "12px 14px", background: "#f8f9fa", borderRadius: 8 }}>
+                      <div style={{ fontSize: 13, fontWeight: 600, color: "#202124", marginBottom: 6 }}>Your display name</div>
+                      <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                        <input
+                          type="text"
+                          placeholder="e.g. Jane Smith"
+                          value={displayNameDraft}
+                          onChange={e => setDisplayNameDraft(e.target.value)}
+                          onKeyDown={e => e.key === 'Enter' && handleSaveDisplayName()}
+                          disabled={displayNameSaving}
+                          style={{ flex: 1, padding: "6px 10px", border: "1px solid #dadce0", borderRadius: 6, fontSize: 14, outline: "none" }}
+                        />
+                        <button
+                          onClick={handleSaveDisplayName}
+                          disabled={displayNameSaving || !displayNameDraft.trim()}
+                          style={{ padding: "6px 16px", background: displayNameDraft.trim() ? "#1a73e8" : "#a8c7fa", color: "#fff", border: "none", borderRadius: 6, fontWeight: 600, fontSize: 13, cursor: displayNameDraft.trim() ? "pointer" : "default", opacity: displayNameSaving ? 0.6 : 1 }}
+                        >
+                          {displayNameSaving ? "Saving..." : "Save"}
+                        </button>
+                      </div>
+                      <div style={{ fontSize: 11, color: "#80868b", marginTop: 4 }}>This name is visible to other members in your organization</div>
+                    </div>
                     {isOrgAdmin && (
                       <>
                         <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16, padding: "10px 14px", background: "#f3e8ff", borderRadius: 8 }}>
@@ -8940,7 +8980,17 @@ export default function WorkHoursTracker({ onImport }) {
                         })}
                       </div>
                     )}
-                    <button onClick={handleCreatePortfolio} style={{ padding: "8px 16px", background: "#0891b2", color: "#fff", border: "none", borderRadius: 6, fontWeight: 600, cursor: "pointer", fontSize: 13 }}>+ New Portfolio</button>
+                    <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                      <input
+                        type="text"
+                        placeholder="New portfolio name"
+                        value={newPortfolioName}
+                        onChange={e => setNewPortfolioName(e.target.value)}
+                        onKeyDown={e => e.key === 'Enter' && handleCreatePortfolio()}
+                        style={{ flex: 1, padding: "7px 12px", border: "1px solid #dadce0", borderRadius: 6, fontSize: 13, outline: "none" }}
+                      />
+                      <button onClick={handleCreatePortfolio} disabled={!newPortfolioName.trim()} style={{ padding: "7px 16px", background: newPortfolioName.trim() ? "#0891b2" : "#a5d8e6", color: "#fff", border: "none", borderRadius: 6, fontWeight: 600, cursor: newPortfolioName.trim() ? "pointer" : "default", fontSize: 13 }}>+ Create</button>
+                    </div>
                   </div>
                 </>
               )}

@@ -655,6 +655,15 @@ export async function removeMember(orgId, targetUserId) {
   if (error) throw new Error(`removeMember failed: ${error.message}`);
 }
 
+export async function updateMyDisplayName(orgId, userId, displayName) {
+  const { error } = await supabase
+    .from('organization_members')
+    .update({ display_name: displayName })
+    .eq('org_id', orgId)
+    .eq('user_id', userId);
+  if (error) throw new Error(`updateMyDisplayName failed: ${error.message}`);
+}
+
 export async function regenerateInviteCode(orgId) {
   const code = Math.random().toString(36).slice(2, 10);
   const { error } = await supabase
