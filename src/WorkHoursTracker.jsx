@@ -2569,6 +2569,9 @@ export default function WorkHoursTracker({ onImport }) {
     }
   }
 
+  // ═══ WEEK DATA ═══
+  const weekKey = `${currentYear}-W${currentWeek}`;
+
   // Load portfolio members when portfolios change
   useEffect(() => {
     if (orgPortfolios.length === 0) { setPortfolioMemberMap({}); return; }
@@ -2611,9 +2614,6 @@ export default function WorkHoursTracker({ onImport }) {
     })();
     return () => { cancelled = true; };
   }, [activePortfolioId, portfolioMemberMap, portfolioWeekKey, weekKey, isPortfolioManager]);
-
-  // ═══ WEEK DATA ═══
-  const weekKey = `${currentYear}-W${currentWeek}`;
   const weekData = allData[weekKey] || [[], [], [], [], [], [], []];
 
   const monday = getMondayOfWeek(currentWeek, currentYear);
