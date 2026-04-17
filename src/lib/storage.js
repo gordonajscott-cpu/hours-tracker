@@ -596,6 +596,243 @@ export async function deleteProfile(userId, id) {
   if (error) throw new Error(`deleteProfile failed: ${error.message}`);
 }
 
+// ── Organizations ──
+
+export async function createOrg(name) {
+  if (!supabaseConfigured) throw new Error('Supabase not configured');
+  const { data, error } = await supabase.rpc('create_organization', { org_name: name });
+  if (error) throw new Error(`createOrg failed: ${error.message}`);
+  return data;
+}
+
+export async function joinOrg(inviteCode) {
+  if (!supabaseConfigured) throw new Error('Supabase not configured');
+  const { data, error } = await supabase.rpc('join_org_by_invite', { code: inviteCode });
+  if (error) throw new Error(`joinOrg failed: ${error.message}`);
+  if (data?.error) throw new Error(data.error);
+  return data;
+}
+
+export async function getMyOrg(userId) {
+  if (!supabaseConfigured || !userId) return null;
+  const { data, error } = await supabase
+    .from('organization_members')
+    .select('org_id, role, joined_at, organizations(id, name, invite_code, created_at)')
+    .eq('user_id', userId);
+  if (isMissingTableError(error)) return null;
+  if (error) return null;
+  if (!data || data.length === 0) return null;
+  return data[0];
+}
+
+export async function getOrgMembers(orgId) {
+  if (!supabaseConfigured) return [];
+  const { data, error } = await supabase
+    .from('organization_members')
+    .select('user_id, role, display_name, joined_at')
+    .eq('org_id', orgId)
+    .order('joined_at');
+  if (error) throw new Error(`getOrgMembers failed: ${error.message}`);
+  return data || [];
+}
+
+export async function updateMemberRole(orgId, targetUserId, role) {
+  const { error } = await supabase
+    .from('organization_members')
+    .update({ role })
+    .eq('org_id', orgId)
+    .eq('user_id', targetUserId);
+  if (error) throw new Error(`updateMemberRole failed: ${error.message}`);
+}
+
+export async function removeMember(orgId, targetUserId) {
+  const { error } = await supabase
+    .from('organization_members')
+    .delete()
+    .eq('org_id', orgId)
+    .eq('user_id', targetUserId);
+  if (error) throw new Error(`removeMember failed: ${error.message}`);
+}
+
+export async function regenerateInviteCode(orgId) {
+  const code = Math.random().toString(36).slice(2, 10);
+  const { error } = await supabase
+    .from('organizations')
+    .update({ invite_code: code })
+    .eq('id', orgId);
+  if (error) throw new Error(`regenerateInviteCode failed: ${error.message}`);
+  return code;
+}
+
+export async function loadOrgConfig(orgId) {
+  if (!supabaseConfigured) return null;
+  const { data, error } = await supabase
+    .from('org_config')
+    .select('data')
+    .eq('org_id', orgId)
+    .maybeSingle();
+  if (error) return null;
+  return data?.data || {};
+}
+
+export async function saveOrgConfig(orgId, configData) {
+  const { error } = await supabase
+    .from('org_config')
+    .upsert({
+      org_id: orgId,
+      data: configData,
+      updated_at: new Date().toISOString(),
+    }, { onConflict: 'org_id' });
+  if (error) throw new Error(`saveOrgConfig failed: ${error.message}`);
+}
+
+export async function linkProfileToOrg(userId, profileId, orgId) {
+  const { error } = await supabase
+    .from('profiles')
+    .update({ organization_id: orgId })
+    .eq('user_id', userId)
+    .eq('id', profileId);
+  if (error) throw new Error(`linkProfileToOrg failed: ${error.message}`);
+}
+
+export async function unlinkProfileFromOrg(userId, profileId) {
+  const { error } = await supabase
+    .from('profiles')
+    .update({ organization_id: null })
+    .eq('user_id', userId)
+    .eq('id', profileId);
+  if (error) throw new Error(`unlinkProfileFromOrg failed: ${error.message}`);
+}
+
+export async function leaveOrg(orgId, userId) {
+  await supabase
+    .from('profiles')
+    .update({ organization_id: null })
+    .eq('user_id', userId)
+    .not('organization_id', 'is', null);
+  const { error } = await supabase
+    .from('organization_members')
+    .delete()
+    .eq('org_id', orgId)
+    .eq('user_id', userId);
+  if (error) throw new Error(`leaveOrg failed: ${error.message}`);
+}
+
+// ── Portfolios ──
+
+export async function createPortfolio(orgId, name) {
+  const { data, error } = await supabase
+    .from('portfolios')
+    .insert({ org_id: orgId, name })
+    .select()
+    .single();
+  if (error) throw new Error(`createPortfolio failed: ${error.message}`);
+  return data;
+}
+
+export async function listOrgPortfolios(orgId) {
+  if (!supabaseConfigured) return null;
+  const { data, error } = await supabase
+    .from('portfolios')
+    .select('*')
+    .eq('org_id', orgId)
+    .order('created_at');
+  if (isMissingTableError(error)) return null;
+  if (error) return null;
+  return data || [];
+}
+
+export async function deletePortfolio(portfolioId) {
+  const { error } = await supabase
+    .from('portfolios')
+    .delete()
+    .eq('id', portfolioId);
+  if (error) throw new Error(`deletePortfolio failed: ${error.message}`);
+}
+
+export async function renamePortfolio(portfolioId, name) {
+  const { error } = await supabase
+    .from('portfolios')
+    .update({ name })
+    .eq('id', portfolioId);
+  if (error) throw new Error(`renamePortfolio failed: ${error.message}`);
+}
+
+export async function addPortfolioMember(portfolioId, userId, role = 'member') {
+  const { error } = await supabase
+    .from('portfolio_members')
+    .upsert(
+      { portfolio_id: portfolioId, user_id: userId, role },
+      { onConflict: 'portfolio_id,user_id' },
+    );
+  if (error) throw new Error(`addPortfolioMember failed: ${error.message}`);
+}
+
+export async function removePortfolioMember(portfolioId, userId) {
+  const { error } = await supabase
+    .from('portfolio_members')
+    .delete()
+    .eq('portfolio_id', portfolioId)
+    .eq('user_id', userId);
+  if (error) throw new Error(`removePortfolioMember failed: ${error.message}`);
+}
+
+export async function getPortfolioMembers(portfolioId) {
+  if (!supabaseConfigured) return [];
+  const { data, error } = await supabase
+    .from('portfolio_members')
+    .select('user_id, role')
+    .eq('portfolio_id', portfolioId);
+  if (error) throw new Error(`getPortfolioMembers failed: ${error.message}`);
+  return data || [];
+}
+
+export async function updatePortfolioMemberRole(portfolioId, userId, role) {
+  const { error } = await supabase
+    .from('portfolio_members')
+    .update({ role })
+    .eq('portfolio_id', portfolioId)
+    .eq('user_id', userId);
+  if (error) throw new Error(`updatePortfolioMemberRole failed: ${error.message}`);
+}
+
+export async function getMyPortfolios(userId) {
+  if (!supabaseConfigured || !userId) return null;
+  const { data, error } = await supabase
+    .from('portfolio_members')
+    .select('portfolio_id, role, portfolios(id, name, org_id)')
+    .eq('user_id', userId);
+  if (isMissingTableError(error)) return null;
+  if (error) return null;
+  return data || [];
+}
+
+export async function loadPortfolioEntries(memberUserIds, weekKey) {
+  if (!supabaseConfigured || memberUserIds.length === 0) return [];
+  const { data, error } = await supabase
+    .from('time_entries')
+    .select('*')
+    .in('user_id', memberUserIds)
+    .eq('week_key', weekKey)
+    .order('user_id')
+    .order('day_index')
+    .order('start_time');
+  if (error) throw new Error(`loadPortfolioEntries failed: ${error.message}`);
+  return data || [];
+}
+
+export async function loadPortfolioTasks(memberUserIds) {
+  if (!supabaseConfigured || memberUserIds.length === 0) return [];
+  const { data, error } = await supabase
+    .from('tasks')
+    .select('*')
+    .in('user_id', memberUserIds)
+    .order('user_id')
+    .order('sort_order');
+  if (error) throw new Error(`loadPortfolioTasks failed: ${error.message}`);
+  return data || [];
+}
+
 // ── Public API ──
 
 export function getStorage(userId, profileId = null) {

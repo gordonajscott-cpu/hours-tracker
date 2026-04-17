@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect, useCallback, useRef } from "react";
 import { useAuth } from "./lib/AuthContext";
-import { getStorage, loadAllData, saveAllData, loadTasks, saveTasks, createBackup, listBackups, getBackup, deleteBackup, pruneBackups, BackupsTableMissingError, ensureDefaultProfile, createProfile, renameProfile, deleteProfile, ProfilesTableMissingError } from "./lib/storage";
+import { getStorage, loadAllData, saveAllData, loadTasks, saveTasks, createBackup, listBackups, getBackup, deleteBackup, pruneBackups, BackupsTableMissingError, ensureDefaultProfile, createProfile, renameProfile, deleteProfile, ProfilesTableMissingError, createOrg, joinOrg, getMyOrg, getOrgMembers, updateMemberRole, removeMember, regenerateInviteCode, loadOrgConfig, saveOrgConfig, linkProfileToOrg, unlinkProfileFromOrg, leaveOrg, createPortfolio, listOrgPortfolios, deletePortfolio, renamePortfolio, addPortfolioMember, removePortfolioMember, getPortfolioMembers, updatePortfolioMemberRole, getMyPortfolios, loadPortfolioEntries, loadPortfolioTasks } from "./lib/storage";
 import { supabase, supabaseConfigured } from "./lib/supabase";
 
 const DAYS = ["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"];
@@ -1735,6 +1735,45 @@ export default function WorkHoursTracker({ onImport }) {
     () => getStorage(userId, effectiveProfileId),
     [userId, effectiveProfileId],
   );
+  // Organization (requires migration 005)
+  const [org, setOrg] = useState(null); // { org_id, role, organizations: { id, name, invite_code } }
+  const [orgMembers, setOrgMembers] = useState([]);
+  const [orgConfig, setOrgConfig] = useState(null);
+  const [orgVersion, setOrgVersion] = useState(0);
+  // Portfolio (requires migration 006)
+  const [orgPortfolios, setOrgPortfolios] = useState([]);
+  const [myPortfolioMemberships, setMyPortfolioMemberships] = useState([]);
+  const [activePortfolioId, setActivePortfolioId] = useState(null);
+  const [portfolioMemberMap, setPortfolioMemberMap] = useState({});
+  const [portfolioEntries, setPortfolioEntries] = useState([]);
+  const [portfolioTasks, setPortfolioTasks] = useState([]);
+  const [portfolioWeekKey, setPortfolioWeekKey] = useState(null);
+  const [portfolioLoading, setPortfolioLoading] = useState(false);
+
+  // Organization-aware config resolution
+  const activeProfile = profiles.find(p => p.id === activeProfileId);
+  const isOrgProfile = !!(activeProfile?.organization_id);
+  const isOrgAdmin = org?.role === 'admin';
+  const orgId = org?.organizations?.id || org?.org_id || null;
+
+  const activeConfig = useMemo(() => {
+    if (!isOrgProfile || !orgConfig) return config;
+    return {
+      ...config,
+      customers: orgConfig.customers || [],
+      projects: orgConfig.projects || [],
+      workOrders: orgConfig.workOrders || [],
+      activities: orgConfig.activities || [],
+      activityTemplates: orgConfig.activityTemplates || [],
+      roles: orgConfig.roles || [],
+      billRates: orgConfig.billRates || [],
+      tags: [...(orgConfig.tags || []), ...(config.customTags || [])],
+    };
+  }, [config, orgConfig, isOrgProfile]);
+
+  // Whether the current user manages any portfolio (shows portfolio tab)
+  const isPortfolioManager = myPortfolioMemberships.some(m => m.role === 'manager');
+
   const [taskFilter, setTaskFilter] = useState("all"); // all, not_started, in_progress, on_hold
   const [taskSort, setTaskSort] = useState("priority"); // priority, due, title
   const [taskDurationFilter, setTaskDurationFilter] = useState(0);
@@ -2298,6 +2337,281 @@ export default function WorkHoursTracker({ onImport }) {
     }
   }
 
+  // ── Organization probe: detect if user is in an org, load org config ──
+  useEffect(() => {
+    if (!userId || userId === "local" || !supabaseConfigured) {
+      setOrg(null);
+      setOrgConfig(null);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      try {
+        const membership = await getMyOrg(userId);
+        if (cancelled) return;
+        if (!membership) { setOrg(null); setOrgConfig(null); return; }
+        setOrg(membership);
+        const oid = membership.organizations?.id;
+        if (oid) {
+          const [members, oc] = await Promise.all([
+            getOrgMembers(oid),
+            loadOrgConfig(oid),
+          ]);
+          if (cancelled) return;
+          setOrgMembers(members || []);
+          setOrgConfig(oc || {});
+        }
+      } catch (err) {
+        console.error("Org probe failed:", err);
+        if (!cancelled) { setOrg(null); setOrgConfig(null); }
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [userId, orgVersion]);
+
+  // ── Org config auto-save (admin only) ──
+  useEffect(() => {
+    if (!orgConfig || !orgId || !isOrgAdmin) return;
+    const timer = setTimeout(() => {
+      saveOrgConfig(orgId, orgConfig).catch(err => console.error("saveOrgConfig failed:", err));
+    }, 800);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [orgConfig]);
+
+  // ── Portfolio probe ──
+  useEffect(() => {
+    if (!userId || userId === "local" || !supabaseConfigured || !orgId) {
+      setOrgPortfolios([]);
+      setMyPortfolioMemberships([]);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      try {
+        const [portfolios, myPms] = await Promise.all([
+          listOrgPortfolios(orgId),
+          getMyPortfolios(userId),
+        ]);
+        if (cancelled) return;
+        setOrgPortfolios(portfolios || []);
+        setMyPortfolioMemberships(myPms || []);
+      } catch {
+        if (!cancelled) { setOrgPortfolios([]); setMyPortfolioMemberships([]); }
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [userId, orgId, orgVersion]);
+
+  // ── Organization action handlers ──
+  async function handleCreateOrg() {
+    const name = window.prompt("Organization name:");
+    if (!name?.trim()) return;
+    try {
+      const result = await createOrg(name.trim());
+      if (result?.id && activeProfileId) {
+        await linkProfileToOrg(userId, activeProfileId, result.id);
+        setProfilesVersion(v => v + 1);
+      }
+      setOrgVersion(v => v + 1);
+    } catch (err) {
+      alert("Could not create organization: " + (err?.message || "Unknown error"));
+    }
+  }
+
+  async function handleJoinOrg() {
+    const code = window.prompt("Paste your organization invite code:");
+    if (!code?.trim()) return;
+    try {
+      const result = await joinOrg(code.trim());
+      if (result?.org_id && activeProfileId) {
+        await linkProfileToOrg(userId, activeProfileId, result.org_id);
+        setProfilesVersion(v => v + 1);
+      }
+      setOrgVersion(v => v + 1);
+    } catch (err) {
+      alert("Could not join organization: " + (err?.message || "Unknown error"));
+    }
+  }
+
+  async function handleLeaveOrg() {
+    if (!orgId) return;
+    if (!window.confirm("Leave this organization? Your profiles will be unlinked.")) return;
+    try {
+      await leaveOrg(orgId, userId);
+      setProfilesVersion(v => v + 1);
+      setOrgVersion(v => v + 1);
+    } catch (err) {
+      alert("Could not leave organization: " + (err?.message || "Unknown error"));
+    }
+  }
+
+  async function handleRegenerateInvite() {
+    if (!orgId) return;
+    if (!window.confirm("Generate a new invite code? The old code will stop working.")) return;
+    try {
+      const code = await regenerateInviteCode(orgId);
+      setOrg(prev => prev ? { ...prev, organizations: { ...prev.organizations, invite_code: code } } : prev);
+    } catch (err) {
+      alert("Could not regenerate invite code: " + (err?.message || ""));
+    }
+  }
+
+  async function handleToggleAdmin(targetUserId) {
+    if (!orgId) return;
+    const member = orgMembers.find(m => m.user_id === targetUserId);
+    if (!member) return;
+    const newRole = member.role === 'admin' ? 'member' : 'admin';
+    try {
+      await updateMemberRole(orgId, targetUserId, newRole);
+      setOrgMembers(prev => prev.map(m => m.user_id === targetUserId ? { ...m, role: newRole } : m));
+    } catch (err) {
+      alert("Could not update role: " + (err?.message || ""));
+    }
+  }
+
+  async function handleRemoveMember(targetUserId) {
+    if (!orgId) return;
+    const member = orgMembers.find(m => m.user_id === targetUserId);
+    if (!window.confirm(`Remove ${member?.display_name || "this member"} from the organization?`)) return;
+    try {
+      await removeMember(orgId, targetUserId);
+      setOrgMembers(prev => prev.filter(m => m.user_id !== targetUserId));
+    } catch (err) {
+      alert("Could not remove member: " + (err?.message || ""));
+    }
+  }
+
+  async function handleLinkProfile(profileId) {
+    if (!orgId) return;
+    try {
+      await linkProfileToOrg(userId, profileId, orgId);
+      setProfilesVersion(v => v + 1);
+    } catch (err) {
+      alert("Could not link profile: " + (err?.message || ""));
+    }
+  }
+
+  async function handleUnlinkProfile(profileId) {
+    try {
+      await unlinkProfileFromOrg(userId, profileId);
+      setProfilesVersion(v => v + 1);
+    } catch (err) {
+      alert("Could not unlink profile: " + (err?.message || ""));
+    }
+  }
+
+  // ── Portfolio action handlers ──
+  async function handleCreatePortfolio() {
+    if (!orgId) return;
+    const name = window.prompt("Portfolio name:");
+    if (!name?.trim()) return;
+    try {
+      await createPortfolio(orgId, name.trim());
+      setOrgVersion(v => v + 1);
+    } catch (err) {
+      alert("Could not create portfolio: " + (err?.message || ""));
+    }
+  }
+
+  async function handleDeletePortfolio(id) {
+    const p = orgPortfolios.find(x => x.id === id);
+    if (!window.confirm(`Delete portfolio "${p?.name || id}"?`)) return;
+    try {
+      await deletePortfolio(id);
+      setOrgVersion(v => v + 1);
+      if (activePortfolioId === id) setActivePortfolioId(null);
+    } catch (err) {
+      alert("Could not delete portfolio: " + (err?.message || ""));
+    }
+  }
+
+  async function handleRenamePortfolio(id) {
+    const p = orgPortfolios.find(x => x.id === id);
+    const name = window.prompt("New name:", p?.name || "");
+    if (!name?.trim()) return;
+    try {
+      await renamePortfolio(id, name.trim());
+      setOrgVersion(v => v + 1);
+    } catch (err) {
+      alert("Could not rename portfolio: " + (err?.message || ""));
+    }
+  }
+
+  async function handleAddPortfolioMember(portfolioId, targetUserId, role = 'member') {
+    try {
+      await addPortfolioMember(portfolioId, targetUserId, role);
+      setOrgVersion(v => v + 1);
+    } catch (err) {
+      alert("Could not add member: " + (err?.message || ""));
+    }
+  }
+
+  async function handleRemovePortfolioMember(portfolioId, targetUserId) {
+    try {
+      await removePortfolioMember(portfolioId, targetUserId);
+      setOrgVersion(v => v + 1);
+    } catch (err) {
+      alert("Could not remove member: " + (err?.message || ""));
+    }
+  }
+
+  async function handleTogglePortfolioManager(portfolioId, targetUserId) {
+    const members = portfolioMemberMap[portfolioId] || [];
+    const member = members.find(m => m.user_id === targetUserId);
+    if (!member) return;
+    const newRole = member.role === 'manager' ? 'member' : 'manager';
+    try {
+      await updatePortfolioMemberRole(portfolioId, targetUserId, newRole);
+      setOrgVersion(v => v + 1);
+    } catch (err) {
+      alert("Could not update role: " + (err?.message || ""));
+    }
+  }
+
+  // Load portfolio members when portfolios change
+  useEffect(() => {
+    if (orgPortfolios.length === 0) { setPortfolioMemberMap({}); return; }
+    let cancelled = false;
+    (async () => {
+      const map = {};
+      for (const p of orgPortfolios) {
+        try {
+          map[p.id] = await getPortfolioMembers(p.id);
+        } catch { map[p.id] = []; }
+      }
+      if (!cancelled) setPortfolioMemberMap(map);
+    })();
+    return () => { cancelled = true; };
+  }, [orgPortfolios]);
+
+  // Load portfolio view data when manager selects a portfolio
+  useEffect(() => {
+    if (!activePortfolioId || !isPortfolioManager) return;
+    const members = portfolioMemberMap[activePortfolioId] || [];
+    const memberIds = members.map(m => m.user_id);
+    if (memberIds.length === 0) { setPortfolioEntries([]); setPortfolioTasks([]); return; }
+    let cancelled = false;
+    setPortfolioLoading(true);
+    const wk = portfolioWeekKey || weekKey;
+    (async () => {
+      try {
+        const [entries, tasks] = await Promise.all([
+          loadPortfolioEntries(memberIds, wk),
+          loadPortfolioTasks(memberIds),
+        ]);
+        if (cancelled) return;
+        setPortfolioEntries(entries || []);
+        setPortfolioTasks(tasks || []);
+      } catch (err) {
+        console.error("Portfolio load failed:", err);
+      } finally {
+        if (!cancelled) setPortfolioLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [activePortfolioId, portfolioMemberMap, portfolioWeekKey, weekKey, isPortfolioManager]);
+
   // ═══ WEEK DATA ═══
   const weekKey = `${currentYear}-W${currentWeek}`;
   const weekData = allData[weekKey] || [[], [], [], [], [], [], []];
@@ -2756,42 +3070,39 @@ export default function WorkHoursTracker({ onImport }) {
   // Get activities for a project (from its template), fallback to global activities
   function getActivitiesForProject(projectName) {
     if (projectName) {
-      const proj = (config.projects || []).find(p => getItemName(p) === projectName);
+      const proj = (activeConfig.projects || []).find(p => getItemName(p) === projectName);
       if (proj && typeof proj === "object" && proj.activityTemplate) {
-        const tmpl = (config.activityTemplates || []).find(t => t.name === proj.activityTemplate);
+        const tmpl = (activeConfig.activityTemplates || []).find(t => t.name === proj.activityTemplate);
         if (tmpl) return tmpl.activities;
       }
     }
-    return config.activities || [];
+    return activeConfig.activities || [];
   }
 
-  // Get project names for a customer, fallback to all projects
   function getProjectsForCustomer(customerName) {
-    const allProjects = getItemNames(config.projects);
+    const allProjects = getItemNames(activeConfig.projects);
     if (!customerName) return allProjects;
-    const filtered = (config.projects || [])
+    const filtered = (activeConfig.projects || [])
       .filter(p => typeof p === "object" && p.customer === customerName)
       .map(getItemName);
     return filtered.length > 0 ? filtered : allProjects;
   }
 
-  // Get work order names for a project, fallback to all work orders
   function getWorkOrdersForProject(projectName) {
-    const allWOs = getItemNames(config.workOrders);
+    const allWOs = getItemNames(activeConfig.workOrders);
     if (!projectName) return allWOs;
-    const filtered = (config.workOrders || [])
+    const filtered = (activeConfig.workOrders || [])
       .filter(wo => typeof wo === "object" && wo.project === projectName)
       .map(getItemName);
     return filtered.length > 0 ? filtered : allWOs;
   }
 
-  // Look up work order → project → customer chain
   function lookupWorkOrderChain(woName) {
-    const wo = (config.workOrders || []).find(w => getItemName(w) === woName);
+    const wo = (activeConfig.workOrders || []).find(w => getItemName(w) === woName);
     const projectName = wo && typeof wo === "object" ? (wo.project || "") : "";
     let customerName = "";
     if (projectName) {
-      const proj = (config.projects || []).find(p => getItemName(p) === projectName);
+      const proj = (activeConfig.projects || []).find(p => getItemName(p) === projectName);
       customerName = proj && typeof proj === "object" ? (proj.customer || "") : "";
     }
     return { project: projectName, customer: customerName };
@@ -4138,11 +4449,11 @@ export default function WorkHoursTracker({ onImport }) {
     }
 
     const rows = Object.entries(projects).sort((a, b) => a[0].localeCompare(b[0])).map(([projName, pData]) => {
-      const projItem = (config.projects || []).find(p => getItemName(p) === projName);
+      const projItem = (activeConfig.projects || []).find(p => getItemName(p) === projName);
       const projCode = projItem ? getItemCode(projItem) : "";
       const projLabel = projCode ? `${projCode} — ${projName}` : projName;
       const woRows = Object.entries(pData.workOrders).sort((a, b) => a[0].localeCompare(b[0])).map(([woName, woData]) => {
-        const woItem = (config.workOrders || []).find(w => getItemName(w) === woName);
+        const woItem = (activeConfig.workOrders || []).find(w => getItemName(w) === woName);
         const woCode = woItem ? getItemCode(woItem) : "";
         const woLabel = woCode ? `${woCode} — ${woName}` : woName;
         const actRows = Object.entries(woData.activities).sort((a, b) => a[0].localeCompare(b[0])).map(([actName, days]) => ({
@@ -4154,7 +4465,7 @@ export default function WorkHoursTracker({ onImport }) {
     });
 
     return { rows, grandTotal, grandTotalSum: grandTotal.reduce((s, h) => s + h, 0), weekDates: DAYS.map((_, i) => { const d = new Date(mon); d.setDate(d.getDate() + i); return d; }) };
-  }, [allData, reportWeek, reportWeekYear, config.projects, config.workOrders, reportFilterField, reportFilterValues]);
+  }, [allData, reportWeek, reportWeekYear, activeConfig.projects, activeConfig.workOrders, reportFilterField, reportFilterValues]);
 
   if (loading) return (
     <div style={{ fontFamily: "'Inter', 'Roboto', sans-serif", minHeight: "100vh", background: "#f1f3f4", color: "#5f6368", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18 }}>
@@ -4555,7 +4866,7 @@ export default function WorkHoursTracker({ onImport }) {
                   if (chain.project) setTimerProject(chain.project);
                   if (chain.customer) setTimerCustomer(chain.customer);
                 }
-              }} options={getItemNames(config.workOrders)} configItems={config.workOrders} placeholder="—" />
+              }} options={getItemNames(activeConfig.workOrders)} configItems={activeConfig.workOrders} placeholder="—" />
             </div>
             <div>
               <div style={{ fontSize: 13, color: "#5f6368", textTransform: "uppercase", letterSpacing: "1px", marginBottom: 5 }}>Activity</div>
@@ -4563,15 +4874,15 @@ export default function WorkHoursTracker({ onImport }) {
             </div>
             <div>
               <div style={{ fontSize: 13, color: "#5f6368", textTransform: "uppercase", letterSpacing: "1px", marginBottom: 5 }}>Project</div>
-              <FavSel value={timerProject} onChange={v => { setTimerProject(v); setTimerWorkOrder(""); }} options={getProjectsForCustomer(timerCustomer)} configItems={config.projects} placeholder="—" />
+              <FavSel value={timerProject} onChange={v => { setTimerProject(v); setTimerWorkOrder(""); }} options={getProjectsForCustomer(timerCustomer)} configItems={activeConfig.projects} placeholder="—" />
             </div>
             <div>
               <div style={{ fontSize: 13, color: "#5f6368", textTransform: "uppercase", letterSpacing: "1px", marginBottom: 5 }}>Customer</div>
-              <FavSel value={timerCustomer} onChange={v => { setTimerCustomer(v); setTimerProject(""); setTimerWorkOrder(""); }} options={getItemNames(config.customers)} configItems={config.customers} placeholder="—" />
+              <FavSel value={timerCustomer} onChange={v => { setTimerCustomer(v); setTimerProject(""); setTimerWorkOrder(""); }} options={getItemNames(activeConfig.customers)} configItems={activeConfig.customers} placeholder="—" />
             </div>
             <div>
               <div style={{ fontSize: 13, color: "#5f6368", textTransform: "uppercase", letterSpacing: "1px", marginBottom: 5 }}>Tags</div>
-              <TagMultiSelect selected={timerTags} onChange={setTimerTags} options={config.tags} favouriteNames={config.favouriteTags || []} tagCategories={config.tagCategories} />
+              <TagMultiSelect selected={timerTags} onChange={setTimerTags} options={activeConfig.tags} favouriteNames={config.favouriteTags || []} tagCategories={config.tagCategories} />
             </div>
           </div>
         </div>
@@ -4591,6 +4902,7 @@ export default function WorkHoursTracker({ onImport }) {
           ["week", "📅", "Week"],
           ["tasks", "✓", "Tasks"],
           ["reports", "📈", "Reports"],
+          ...(isPortfolioManager ? [["portfolio", "👥", "Portfolio"]] : []),
         ].map(([tab, icon, label]) => (
           <button key={tab} onClick={() => setActiveTab(tab)} title={label} style={{
             fontFamily: "'Inter', 'Roboto', sans-serif", fontSize: isMobile ? 11 : 14, fontWeight: 500,
@@ -5173,7 +5485,7 @@ export default function WorkHoursTracker({ onImport }) {
                       } else {
                         updateEntry(selectedEntryId, "workOrder", v);
                       }
-                    }} options={getItemNames(config.workOrders)} configItems={config.workOrders} placeholder="— Select —" />
+                    }} options={getItemNames(activeConfig.workOrders)} configItems={activeConfig.workOrders} placeholder="— Select —" />
                   </div>
                   <div>
                     <div style={{ fontSize: 13, color: "#5f6368", marginBottom: 5 }}>ACTIVITY</div>
@@ -5183,20 +5495,20 @@ export default function WorkHoursTracker({ onImport }) {
                     <div style={{ fontSize: 13, color: "#5f6368", marginBottom: 5 }}>PROJECT</div>
                     <FavSel value={selectedEntry.project} onChange={v => {
                       updateEntryFields(selectedEntryId, { project: v, workOrder: "" });
-                    }} options={getProjectsForCustomer(selectedEntry.customer)} configItems={config.projects} placeholder="— Select —" />
+                    }} options={getProjectsForCustomer(selectedEntry.customer)} configItems={activeConfig.projects} placeholder="— Select —" />
                   </div>
                   <div>
                     <div style={{ fontSize: 13, color: "#5f6368", marginBottom: 5 }}>CUSTOMER</div>
                     <FavSel value={selectedEntry.customer} onChange={v => {
                       updateEntryFields(selectedEntryId, { customer: v, project: "", workOrder: "" });
-                    }} options={getItemNames(config.customers)} configItems={config.customers} placeholder="— Select —" />
+                    }} options={getItemNames(activeConfig.customers)} configItems={activeConfig.customers} placeholder="— Select —" />
                   </div>
                   <div>
                     <div style={{ fontSize: 13, color: "#5f6368", marginBottom: 5 }}>TAGS</div>
                     <TagMultiSelect
                       selected={selectedEntry.tags || (selectedEntry.tag ? [selectedEntry.tag] : [])}
                       onChange={v => updateEntryFields(selectedEntryId, { tags: v, tag: undefined })}
-                      options={config.tags}
+                      options={activeConfig.tags}
                       favouriteNames={config.favouriteTags || []}
                       tagCategories={config.tagCategories}
                     />
@@ -7060,7 +7372,7 @@ export default function WorkHoursTracker({ onImport }) {
               <select onChange={e => { if (e.target.value) { batchSelected.forEach(id => updateTask(id, { project: e.target.value })); setBatchSelected(new Set()); } e.target.value = ""; }}
                 style={{ fontSize: 12, padding: "3px 8px", border: "1px solid #dadce0", borderRadius: 6, outline: "none", cursor: "pointer", color: "#80868b" }}>
                 <option value="">Set project...</option>
-                {getItemNames(config.projects).map(p => <option key={p} value={p}>{p}</option>)}
+                {getItemNames(activeConfig.projects).map(p => <option key={p} value={p}>{p}</option>)}
               </select>
               <select onChange={e => { if (e.target.value) { batchSelected.forEach(id => updateTask(id, { dueDate: e.target.value })); setBatchSelected(new Set()); } e.target.value = ""; }}
                 style={{ fontSize: 12, padding: "3px 8px", border: "1px solid #dadce0", borderRadius: 6, outline: "none", cursor: "pointer", color: "#80868b" }}>
@@ -7319,18 +7631,18 @@ export default function WorkHoursTracker({ onImport }) {
                     <FavSel small value={task.workOrder} onChange={v => {
                       if (v) { const chain = lookupWorkOrderChain(v); updateTask(task.id, { workOrder: v, ...(chain.project ? { project: chain.project } : {}), ...(chain.customer ? { customer: chain.customer } : {}) }); }
                       else updateTask(task.id, { workOrder: "" });
-                    }} options={getWorkOrdersForProject(task.project)} configItems={config.workOrders} placeholder="Work Order..." />
+                    }} options={getWorkOrdersForProject(task.project)} configItems={activeConfig.workOrders} placeholder="Work Order..." />
                     <FavSel small value={task.activity} onChange={v => updateTask(task.id, { activity: v })}
                       options={getActivitiesForProject(task.project)} favouriteNames={config.favouriteActivities || []} placeholder="Activity..." />
                     <FavSel small value={task.project} onChange={v => updateTask(task.id, { project: v, workOrder: "" })}
-                      options={getItemNames(config.projects)} configItems={config.projects} placeholder="Project..." />
+                      options={getItemNames(activeConfig.projects)} configItems={activeConfig.projects} placeholder="Project..." />
                     <FavSel small value={task.customer} onChange={v => updateTask(task.id, { customer: v, project: "", workOrder: "" })}
-                      options={getItemNames(config.customers)} configItems={config.customers} placeholder="Customer..." />
+                      options={getItemNames(activeConfig.customers)} configItems={activeConfig.customers} placeholder="Customer..." />
                     <div style={{ width: "100%", marginTop: 4 }}>
                       <TagMultiSelect
                         selected={task.tags || []}
                         onChange={v => updateTask(task.id, { tags: v })}
-                        options={config.tags}
+                        options={activeConfig.tags}
                         favouriteNames={config.favouriteTags || []}
                         tagCategories={config.tagCategories}
                       />
@@ -7793,9 +8105,9 @@ export default function WorkHoursTracker({ onImport }) {
                 ) : (
                   <div style={{ display: "flex", flexDirection: "column", gap: 6, marginBottom: 18 }}>
                     {data.map(([name, hrs, subs], i) => {
-                      const displayName = (reportGroup === "customer") ? resolveLabel(name, config.customers)
-                        : (reportGroup === "project") ? resolveLabel(name, config.projects)
-                        : (reportGroup === "workOrder") ? resolveLabel(name, config.workOrders)
+                      const displayName = (reportGroup === "customer") ? resolveLabel(name, activeConfig.customers)
+                        : (reportGroup === "project") ? resolveLabel(name, activeConfig.projects)
+                        : (reportGroup === "workOrder") ? resolveLabel(name, activeConfig.workOrders)
                         : name;
                       return (
                       <div key={name} style={{
@@ -7821,7 +8133,7 @@ export default function WorkHoursTracker({ onImport }) {
                           <div style={{ padding: "0 18px 12px 36px", display: "flex", flexDirection: "column", gap: 4 }}>
                             {subs.map(([subName, subHrs], si) => {
                               const subDisplayName = (reportGroup === "customer" || reportGroup === "activity" || reportGroup === "role" || reportGroup === "billRate" || reportGroup === "tag")
-                                ? resolveLabel(subName, config.projects)
+                                ? resolveLabel(subName, activeConfig.projects)
                                 : subName;
                               return (
                                 <div key={subName} style={{ display: "flex", alignItems: "center", gap: 10, padding: "6px 12px", background: "#f8f9fa", borderRadius: 8 }}>
@@ -7885,9 +8197,9 @@ export default function WorkHoursTracker({ onImport }) {
                             ent.activity,
                             ent.role,
                             ent.billRate,
-                            resolveLabel(ent.workOrder, config.workOrders),
-                            resolveLabel(ent.project, config.projects),
-                            resolveLabel(ent.customer, config.customers),
+                            resolveLabel(ent.workOrder, activeConfig.workOrders),
+                            resolveLabel(ent.project, activeConfig.projects),
+                            resolveLabel(ent.customer, activeConfig.customers),
                             ...entryTags
                           ].filter(Boolean);
                           return (
@@ -8296,33 +8608,321 @@ export default function WorkHoursTracker({ onImport }) {
         </div>
       )}
 
-      {/* ═══════ ADMIN TAB ═══════ */}
-      {activeTab === "admin" && (
+      {/* ═══════ PORTFOLIO TAB ═══════ */}
+      {activeTab === "portfolio" && isPortfolioManager && (
         <div>
+          <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 16, flexWrap: "wrap" }}>
+            <select value={activePortfolioId || ""} onChange={e => { setActivePortfolioId(e.target.value || null); setPortfolioWeekKey(null); }}
+              style={{ padding: "8px 12px", borderRadius: 6, border: "1px solid #dadce0", fontSize: 14, fontFamily: "'Inter', 'Roboto', sans-serif" }}>
+              <option value="">Select portfolio...</option>
+              {myPortfolioMemberships.filter(m => m.role === 'manager').map(m => (
+                <option key={m.portfolio_id} value={m.portfolio_id}>{m.portfolios?.name || m.portfolio_id}</option>
+              ))}
+            </select>
+            {activePortfolioId && (
+              <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                <button onClick={() => setPortfolioWeekKey(prev => {
+                  const [y, w] = (prev || weekKey).split("-W").map(Number);
+                  return w > 1 ? `${y}-W${w - 1}` : `${y - 1}-W52`;
+                })} style={{ padding: "6px 10px", background: "#f1f3f4", border: "none", borderRadius: 6, cursor: "pointer" }}>◀</button>
+                <span style={{ fontSize: 14, fontWeight: 600, color: "#202124", minWidth: 80, textAlign: "center" }}>{portfolioWeekKey || weekKey}</span>
+                <button onClick={() => setPortfolioWeekKey(prev => {
+                  const [y, w] = (prev || weekKey).split("-W").map(Number);
+                  return w < 52 ? `${y}-W${w + 1}` : `${y + 1}-W1`;
+                })} style={{ padding: "6px 10px", background: "#f1f3f4", border: "none", borderRadius: 6, cursor: "pointer" }}>▶</button>
+              </div>
+            )}
+          </div>
+
+          {!activePortfolioId && (
+            <div style={{ textAlign: "center", padding: 40, color: "#5f6368", fontSize: 14 }}>Select a portfolio to view member hours and tasks.</div>
+          )}
+
+          {activePortfolioId && portfolioLoading && (
+            <div style={{ textAlign: "center", padding: 40, color: "#5f6368" }}>Loading portfolio data...</div>
+          )}
+
+          {activePortfolioId && !portfolioLoading && (() => {
+            const members = portfolioMemberMap[activePortfolioId] || [];
+            const memberIds = members.map(m => m.user_id);
+            const memberLookup = {};
+            for (const m of members) {
+              const om = orgMembers.find(x => x.user_id === m.user_id);
+              memberLookup[m.user_id] = om?.display_name || m.user_id.slice(0, 8);
+            }
+
+            const entriesByUser = {};
+            for (const e of portfolioEntries) {
+              if (!entriesByUser[e.user_id]) entriesByUser[e.user_id] = [];
+              entriesByUser[e.user_id].push(e);
+            }
+
+            const tasksByUser = {};
+            for (const t of portfolioTasks) {
+              if (!tasksByUser[t.user_id]) tasksByUser[t.user_id] = [];
+              tasksByUser[t.user_id].push(t);
+            }
+
+            return (
+              <div>
+                {/* Hours summary */}
+                <div style={{ fontSize: 12, fontWeight: 700, color: "#1a73e8", textTransform: "uppercase", letterSpacing: "1.5px", marginBottom: 10, display: "flex", alignItems: "center", gap: 8 }}>
+                  <div style={{ flex: 1, height: 1, background: "#c5d7f2" }} />
+                  Hours — {portfolioWeekKey || weekKey}
+                  <div style={{ flex: 1, height: 1, background: "#c5d7f2" }} />
+                </div>
+                <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 24 }}>
+                  {memberIds.map(uid => {
+                    const userEntries = entriesByUser[uid] || [];
+                    let totalMins = 0;
+                    for (const e of userEntries) {
+                      if (e.start_time && e.end_time) {
+                        const [sh, sm] = e.start_time.split(":").map(Number);
+                        const [eh, em] = e.end_time.split(":").map(Number);
+                        totalMins += (eh * 60 + em) - (sh * 60 + sm);
+                      }
+                    }
+                    const hrs = (totalMins / 60).toFixed(1);
+                    return (
+                      <div key={uid} style={{ background: "#fff", border: "1px solid #dadce0", borderRadius: 8, padding: "12px 16px" }}>
+                        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 6 }}>
+                          <span style={{ fontWeight: 600, fontSize: 14, color: "#202124" }}>{memberLookup[uid]}</span>
+                          <span style={{ fontSize: 14, fontWeight: 700, color: "#1a73e8" }}>{hrs}h</span>
+                        </div>
+                        {userEntries.length > 0 && (
+                          <div style={{ fontSize: 12, color: "#5f6368" }}>
+                            {userEntries.length} entries across {new Set(userEntries.map(e => e.day_index)).size} days
+                            {userEntries.some(e => e.project) && (
+                              <> — {[...new Set(userEntries.filter(e => e.project).map(e => e.project))].join(", ")}</>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* Tasks overview */}
+                <div style={{ fontSize: 12, fontWeight: 700, color: "#137333", textTransform: "uppercase", letterSpacing: "1.5px", marginBottom: 10, display: "flex", alignItems: "center", gap: 8 }}>
+                  <div style={{ flex: 1, height: 1, background: "#c5e6d0" }} />
+                  Tasks
+                  <div style={{ flex: 1, height: 1, background: "#c5e6d0" }} />
+                </div>
+                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                  {memberIds.map(uid => {
+                    const userTasks = tasksByUser[uid] || [];
+                    const active = userTasks.filter(t => t.status !== 'completed' && t.status !== 'cancelled');
+                    const completed = userTasks.filter(t => t.status === 'completed');
+                    return (
+                      <div key={uid} style={{ background: "#fff", border: "1px solid #dadce0", borderRadius: 8, padding: "12px 16px" }}>
+                        <div style={{ fontWeight: 600, fontSize: 14, color: "#202124", marginBottom: 6 }}>{memberLookup[uid]}</div>
+                        <div style={{ fontSize: 12, color: "#5f6368", marginBottom: 6 }}>
+                          {active.length} active, {completed.length} completed
+                        </div>
+                        {active.slice(0, 5).map(t => (
+                          <div key={t.id} style={{ fontSize: 13, color: "#202124", padding: "3px 0", borderTop: "1px solid #f1f3f4" }}>
+                            <span style={{ fontWeight: 500 }}>{t.title}</span>
+                            {t.status && t.status !== 'not_started' && (
+                              <span style={{ fontSize: 11, marginLeft: 6, color: "#5f6368" }}>({t.status.replace("_", " ")})</span>
+                            )}
+                            {t.project && <span style={{ fontSize: 11, marginLeft: 6, color: "#1a73e8" }}>{t.project}</span>}
+                          </div>
+                        ))}
+                        {active.length > 5 && <div style={{ fontSize: 12, color: "#80868b", marginTop: 4 }}>+{active.length - 5} more</div>}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          })()}
+        </div>
+      )}
+
+      {/* ═══════ ADMIN TAB ═══════ */}
+      {activeTab === "admin" && (() => {
+        const cfgUpdate = (key) => (val) => {
+          if (isOrgProfile && isOrgAdmin) setOrgConfig(prev => ({ ...(prev || {}), [key]: val }));
+          else setConfig(prev => ({ ...prev, [key]: val }));
+        };
+        return (
+        <div>
+          {/* ── ORGANIZATION ── */}
+          {supabaseConfigured && userId !== "local" && (
+            <>
+              <div style={{ fontSize: 12, fontWeight: 700, color: "#7c3aed", textTransform: "uppercase", letterSpacing: "1.5px", marginBottom: 10, padding: "0 4px", display: "flex", alignItems: "center", gap: 8 }}>
+                <div style={{ flex: 1, height: 1, background: "#c4b5fd" }} />
+                Organization
+                <div style={{ flex: 1, height: 1, background: "#c4b5fd" }} />
+              </div>
+              <div style={{ background: "#fff", border: "1px solid #dadce0", borderRadius: 12, padding: "20px 24px", marginBottom: 16, boxShadow: "0 1px 3px rgba(0,0,0,0.08)" }}>
+                {org ? (
+                  <>
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
+                      <div>
+                        <div style={{ fontSize: 18, fontWeight: 700, color: "#202124" }}>{org.organizations?.name || "Organization"}</div>
+                        <div style={{ fontSize: 13, color: "#5f6368" }}>Your role: <strong>{org.role}</strong></div>
+                      </div>
+                      <button onClick={handleLeaveOrg} style={{ fontSize: 12, padding: "6px 14px", background: "#fce8e6", color: "#d93025", border: "none", borderRadius: 6, cursor: "pointer", fontWeight: 600 }}>Leave</button>
+                    </div>
+                    {isOrgAdmin && (
+                      <>
+                        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16, padding: "10px 14px", background: "#f3e8ff", borderRadius: 8 }}>
+                          <span style={{ fontSize: 13, color: "#5f6368" }}>Invite code:</span>
+                          <code style={{ fontSize: 14, fontWeight: 600, color: "#7c3aed", background: "#ede9fe", padding: "2px 8px", borderRadius: 4 }}>{org.organizations?.invite_code}</code>
+                          <button onClick={() => { navigator.clipboard?.writeText(org.organizations?.invite_code || ""); }} style={{ fontSize: 11, padding: "4px 10px", background: "#7c3aed", color: "#fff", border: "none", borderRadius: 4, cursor: "pointer" }}>Copy</button>
+                          <button onClick={handleRegenerateInvite} style={{ fontSize: 11, padding: "4px 10px", background: "#fff", color: "#7c3aed", border: "1px solid #c4b5fd", borderRadius: 4, cursor: "pointer" }}>Regenerate</button>
+                        </div>
+                        <div style={{ fontSize: 14, fontWeight: 600, color: "#202124", marginBottom: 8 }}>Members ({orgMembers.length})</div>
+                        <div style={{ display: "flex", flexDirection: "column", gap: 6, marginBottom: 12 }}>
+                          {orgMembers.map(m => (
+                            <div key={m.user_id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 10px", background: "#fafafa", borderRadius: 6, fontSize: 13 }}>
+                              <span style={{ flex: 1, color: "#202124" }}>{m.display_name || m.user_id.slice(0, 8)}</span>
+                              <span style={{ fontSize: 11, padding: "2px 8px", borderRadius: 4, background: m.role === 'admin' ? "#ede9fe" : "#f1f3f4", color: m.role === 'admin' ? "#7c3aed" : "#5f6368", fontWeight: 600 }}>{m.role}</span>
+                              {m.user_id !== userId && (
+                                <>
+                                  <button onClick={() => handleToggleAdmin(m.user_id)} style={{ fontSize: 11, padding: "3px 8px", background: "#fff", border: "1px solid #dadce0", borderRadius: 4, cursor: "pointer" }}>{m.role === 'admin' ? 'Demote' : 'Make Admin'}</button>
+                                  <button onClick={() => handleRemoveMember(m.user_id)} style={{ fontSize: 11, padding: "3px 8px", background: "#fce8e6", color: "#d93025", border: "none", borderRadius: 4, cursor: "pointer" }}>Remove</button>
+                                </>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                        {/* Profile linking */}
+                        {profilesAvailable && profiles.length > 0 && (
+                          <div style={{ marginTop: 12 }}>
+                            <div style={{ fontSize: 14, fontWeight: 600, color: "#202124", marginBottom: 8 }}>Profile Links</div>
+                            <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                              {profiles.map(p => {
+                                const linked = p.organization_id === orgId;
+                                return (
+                                  <div key={p.id} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, padding: "4px 8px", background: linked ? "#f3e8ff" : "#fafafa", borderRadius: 4 }}>
+                                    <span style={{ flex: 1 }}>{p.name}</span>
+                                    {linked
+                                      ? <button onClick={() => handleUnlinkProfile(p.id)} style={{ fontSize: 11, padding: "2px 8px", background: "#fff", border: "1px solid #dadce0", borderRadius: 4, cursor: "pointer" }}>Unlink</button>
+                                      : <button onClick={() => handleLinkProfile(p.id)} style={{ fontSize: 11, padding: "2px 8px", background: "#7c3aed", color: "#fff", border: "none", borderRadius: 4, cursor: "pointer" }}>Link to Org</button>
+                                    }
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        )}
+                      </>
+                    )}
+                    {!isOrgAdmin && profilesAvailable && profiles.length > 0 && (
+                      <div style={{ marginTop: 8 }}>
+                        <div style={{ fontSize: 14, fontWeight: 600, color: "#202124", marginBottom: 8 }}>Your Profiles</div>
+                        <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+                          {profiles.map(p => {
+                            const linked = p.organization_id === orgId;
+                            return (
+                              <div key={p.id} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, padding: "4px 8px", background: linked ? "#f3e8ff" : "#fafafa", borderRadius: 4 }}>
+                                <span style={{ flex: 1 }}>{p.name}</span>
+                                {linked
+                                  ? <span style={{ fontSize: 11, color: "#7c3aed", fontWeight: 600 }}>Linked</span>
+                                  : <button onClick={() => handleLinkProfile(p.id)} style={{ fontSize: 11, padding: "2px 8px", background: "#7c3aed", color: "#fff", border: "none", borderRadius: 4, cursor: "pointer" }}>Link</button>
+                                }
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+                  </>
+                ) : (
+                  <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
+                    <button onClick={handleCreateOrg} style={{ padding: "10px 20px", background: "#7c3aed", color: "#fff", border: "none", borderRadius: 8, fontWeight: 600, cursor: "pointer" }}>Create Organization</button>
+                    <span style={{ color: "#5f6368", fontSize: 13 }}>or</span>
+                    <button onClick={handleJoinOrg} style={{ padding: "10px 20px", background: "#fff", color: "#7c3aed", border: "1px solid #c4b5fd", borderRadius: 8, fontWeight: 600, cursor: "pointer" }}>Join with Invite Code</button>
+                  </div>
+                )}
+              </div>
+
+              {/* ── PORTFOLIOS (admin only) ── */}
+              {org && isOrgAdmin && (
+                <>
+                  <div style={{ fontSize: 12, fontWeight: 700, color: "#0891b2", textTransform: "uppercase", letterSpacing: "1.5px", marginBottom: 10, marginTop: 20, padding: "0 4px", display: "flex", alignItems: "center", gap: 8 }}>
+                    <div style={{ flex: 1, height: 1, background: "#a5f3fc" }} />
+                    Portfolios
+                    <div style={{ flex: 1, height: 1, background: "#a5f3fc" }} />
+                  </div>
+                  <div style={{ background: "#fff", border: "1px solid #dadce0", borderRadius: 12, padding: "20px 24px", marginBottom: 16, boxShadow: "0 1px 3px rgba(0,0,0,0.08)" }}>
+                    {orgPortfolios.length === 0 ? (
+                      <div style={{ fontSize: 13, color: "#5f6368", marginBottom: 12 }}>No portfolios yet. Create one to group members and assign a manager.</div>
+                    ) : (
+                      <div style={{ display: "flex", flexDirection: "column", gap: 12, marginBottom: 12 }}>
+                        {orgPortfolios.map(p => {
+                          const members = portfolioMemberMap[p.id] || [];
+                          return (
+                            <div key={p.id} style={{ border: "1px solid #e5e7eb", borderRadius: 8, padding: "12px 16px" }}>
+                              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+                                <span style={{ fontSize: 15, fontWeight: 600, flex: 1, color: "#202124" }}>{p.name}</span>
+                                <button onClick={() => handleRenamePortfolio(p.id)} style={{ fontSize: 11, padding: "3px 8px", background: "#f1f3f4", border: "none", borderRadius: 4, cursor: "pointer" }}>Rename</button>
+                                <button onClick={() => handleDeletePortfolio(p.id)} style={{ fontSize: 11, padding: "3px 8px", background: "#fce8e6", color: "#d93025", border: "none", borderRadius: 4, cursor: "pointer" }}>Delete</button>
+                              </div>
+                              {members.length > 0 && (
+                                <div style={{ display: "flex", flexDirection: "column", gap: 4, marginBottom: 8 }}>
+                                  {members.map(m => {
+                                    const om = orgMembers.find(x => x.user_id === m.user_id);
+                                    return (
+                                      <div key={m.user_id} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 12, padding: "4px 8px", background: "#f8fafc", borderRadius: 4 }}>
+                                        <span style={{ flex: 1 }}>{om?.display_name || m.user_id.slice(0, 8)}</span>
+                                        <span style={{ fontSize: 10, padding: "1px 6px", borderRadius: 3, background: m.role === 'manager' ? "#dbeafe" : "#f1f3f4", color: m.role === 'manager' ? "#1d4ed8" : "#5f6368", fontWeight: 600 }}>{m.role}</span>
+                                        <button onClick={() => handleTogglePortfolioManager(p.id, m.user_id)} style={{ fontSize: 10, padding: "2px 6px", background: "#fff", border: "1px solid #dadce0", borderRadius: 3, cursor: "pointer" }}>{m.role === 'manager' ? 'Set Member' : 'Set Manager'}</button>
+                                        <button onClick={() => handleRemovePortfolioMember(p.id, m.user_id)} style={{ fontSize: 10, padding: "2px 6px", background: "#fce8e6", color: "#d93025", border: "none", borderRadius: 3, cursor: "pointer" }}>Remove</button>
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              )}
+                              <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                                {orgMembers.filter(om => !(members.some(m => m.user_id === om.user_id))).map(om => (
+                                  <button key={om.user_id} onClick={() => handleAddPortfolioMember(p.id, om.user_id)} style={{ fontSize: 11, padding: "3px 10px", background: "#ecfdf5", color: "#065f46", border: "1px solid #a7f3d0", borderRadius: 4, cursor: "pointer" }}>+ {om.display_name || om.user_id.slice(0, 8)}</button>
+                                ))}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                    <button onClick={handleCreatePortfolio} style={{ padding: "8px 16px", background: "#0891b2", color: "#fff", border: "none", borderRadius: 6, fontWeight: 600, cursor: "pointer", fontSize: 13 }}>+ New Portfolio</button>
+                  </div>
+                </>
+              )}
+            </>
+          )}
+
           {/* ── SECTION 1: WORK STRUCTURE ── */}
+          {isOrgProfile && !isOrgAdmin ? (
+            <div style={{ background: "#f3e8ff", borderRadius: 12, padding: "16px 20px", marginBottom: 16, fontSize: 13, color: "#6b21a8" }}>
+              Customers, projects, work orders, activities, tags, roles, and bill rates are managed by your organization admin. You can set your personal favourites and defaults below.
+            </div>
+          ) : (
+          <>
           <div style={{ fontSize: 12, fontWeight: 700, color: "#1a73e8", textTransform: "uppercase", letterSpacing: "1.5px", marginBottom: 10, padding: "0 4px", display: "flex", alignItems: "center", gap: 8 }}>
             <div style={{ flex: 1, height: 1, background: "#c5d7f2" }} />
-            Work Structure
+            {isOrgProfile ? "Organization Config" : "Work Structure"}
             <div style={{ flex: 1, height: 1, background: "#c5d7f2" }} />
           </div>
 
-          <AdminCodeList title="Customers" items={config.customers} onUpdate={v => setConfig(prev => ({ ...prev, customers: v }))} color="#1a73e8" />
+          <AdminCodeList title="Customers" items={activeConfig.customers} onUpdate={cfgUpdate('customers')} color="#1a73e8" />
 
           <div style={{ marginTop: 16 }}>
             <ProjectEditor
-              items={config.projects}
-              templates={config.activityTemplates || []}
-              customers={config.customers || []}
-              onUpdate={v => setConfig(prev => ({ ...prev, projects: v }))}
+              items={activeConfig.projects}
+              templates={activeConfig.activityTemplates || []}
+              customers={activeConfig.customers || []}
+              onUpdate={cfgUpdate('projects')}
               color="#1a73e8"
             />
           </div>
 
           <div style={{ marginTop: 16 }}>
             <WorkOrderEditor
-              items={config.workOrders}
-              projects={config.projects || []}
-              onUpdate={v => setConfig(prev => ({ ...prev, workOrders: v }))}
+              items={activeConfig.workOrders}
+              projects={activeConfig.projects || []}
+              onUpdate={cfgUpdate('workOrders')}
               color="#1a73e8"
             />
           </div>
@@ -8336,8 +8936,8 @@ export default function WorkHoursTracker({ onImport }) {
 
           <div style={{ marginBottom: 16 }}>
             <ActivityTemplateEditor
-              templates={config.activityTemplates || []}
-              onUpdate={v => setConfig(prev => ({ ...prev, activityTemplates: v }))}
+              templates={activeConfig.activityTemplates || []}
+              onUpdate={cfgUpdate('activityTemplates')}
               color="#8b5cf6"
               favouriteActivities={config.favouriteActivities || []}
               onToggleFav={name => setConfig(prev => {
@@ -8348,14 +8948,14 @@ export default function WorkHoursTracker({ onImport }) {
           </div>
 
           <div className="wht-grid-2col" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
-            <AdminList title="Default Activities" items={config.activities} onUpdate={v => setConfig(prev => ({ ...prev, activities: v }))} color="#80868b"
+            <AdminList title="Default Activities" items={activeConfig.activities} onUpdate={cfgUpdate('activities')} color="#80868b"
               favourites={config.favouriteActivities || []}
               onToggleFav={name => setConfig(prev => {
                 const favs = prev.favouriteActivities || [];
                 return { ...prev, favouriteActivities: favs.includes(name) ? favs.filter(n => n !== name) : [...favs, name] };
               })}
             />
-            <AdminList title="Tags" items={config.tags} onUpdate={v => setConfig(prev => ({ ...prev, tags: v }))} color="#24c1e0"
+            <AdminList title="Tags" items={activeConfig.tags} onUpdate={cfgUpdate('tags')} color="#24c1e0"
               favourites={config.favouriteTags || []}
               onToggleFav={name => setConfig(prev => {
                 const favs = prev.favouriteTags || [];
@@ -8378,8 +8978,8 @@ export default function WorkHoursTracker({ onImport }) {
           </div>
 
           <div className="wht-grid-2col" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
-            <AdminList title="Roles" items={config.roles || []} onUpdate={v => setConfig(prev => ({ ...prev, roles: v }))} color="#e37400" />
-            <AdminList title="Bill Rates" items={config.billRates || []} onUpdate={v => setConfig(prev => ({ ...prev, billRates: v }))} color="#0d904f"
+            <AdminList title="Roles" items={activeConfig.roles || []} onUpdate={cfgUpdate('roles')} color="#e37400" />
+            <AdminList title="Bill Rates" items={activeConfig.billRates || []} onUpdate={cfgUpdate('billRates')} color="#0d904f"
               favourites={config.favouriteBillRates || []}
               onToggleFav={name => setConfig(prev => {
                 const favs = prev.favouriteBillRates || [];
@@ -8387,6 +8987,8 @@ export default function WorkHoursTracker({ onImport }) {
               })}
             />
           </div>
+          </>
+          )}
 
           {/* ── SECTION: BANK HOLIDAYS ── */}
           <div style={{ fontSize: 12, fontWeight: 700, color: "#d93025", textTransform: "uppercase", letterSpacing: "1.5px", marginTop: 28, marginBottom: 10, padding: "0 4px", display: "flex", alignItems: "center", gap: 8 }}>
@@ -8519,15 +9121,15 @@ export default function WorkHoursTracker({ onImport }) {
             <div className="wht-grid-3col" style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12 }}>
               <div>
                 <div style={{ fontSize: 13, color: "#5f6368", marginBottom: 5 }}>Default Customer</div>
-                <FavSel value={defaults.customer} onChange={v => setDefaults(prev => ({ ...prev, customer: v }))} options={getItemNames(config.customers)} configItems={config.customers} placeholder="— None —" />
+                <FavSel value={defaults.customer} onChange={v => setDefaults(prev => ({ ...prev, customer: v }))} options={getItemNames(activeConfig.customers)} configItems={activeConfig.customers} placeholder="— None —" />
               </div>
               <div>
                 <div style={{ fontSize: 13, color: "#5f6368", marginBottom: 5 }}>Default Project</div>
-                <FavSel value={defaults.project} onChange={v => setDefaults(prev => ({ ...prev, project: v }))} options={getProjectsForCustomer(defaults.customer)} configItems={config.projects} placeholder="— None —" />
+                <FavSel value={defaults.project} onChange={v => setDefaults(prev => ({ ...prev, project: v }))} options={getProjectsForCustomer(defaults.customer)} configItems={activeConfig.projects} placeholder="— None —" />
               </div>
               <div>
                 <div style={{ fontSize: 13, color: "#5f6368", marginBottom: 5 }}>Default Work Order</div>
-                <FavSel value={defaults.workOrder} onChange={v => setDefaults(prev => ({ ...prev, workOrder: v }))} options={getWorkOrdersForProject(defaults.project)} configItems={config.workOrders} placeholder="— None —" />
+                <FavSel value={defaults.workOrder} onChange={v => setDefaults(prev => ({ ...prev, workOrder: v }))} options={getWorkOrdersForProject(defaults.project)} configItems={activeConfig.workOrders} placeholder="— None —" />
               </div>
               <div>
                 <div style={{ fontSize: 13, color: "#5f6368", marginBottom: 5 }}>Default Activity</div>
@@ -8535,11 +9137,11 @@ export default function WorkHoursTracker({ onImport }) {
               </div>
               <div>
                 <div style={{ fontSize: 13, color: "#5f6368", marginBottom: 5 }}>Default Role</div>
-                <Sel value={defaults.role} onChange={v => setDefaults(prev => ({ ...prev, role: v }))} options={config.roles || []} placeholder="— None —" />
+                <Sel value={defaults.role} onChange={v => setDefaults(prev => ({ ...prev, role: v }))} options={activeConfig.roles || []} placeholder="— None —" />
               </div>
               <div>
                 <div style={{ fontSize: 13, color: "#5f6368", marginBottom: 5 }}>Default Bill Rate</div>
-                <FavSel value={defaults.billRate} onChange={v => setDefaults(prev => ({ ...prev, billRate: v }))} options={config.billRates || []} favouriteNames={config.favouriteBillRates || []} placeholder="— None —" />
+                <FavSel value={defaults.billRate} onChange={v => setDefaults(prev => ({ ...prev, billRate: v }))} options={activeConfig.billRates || []} favouriteNames={config.favouriteBillRates || []} placeholder="— None —" />
               </div>
             </div>
           </div>
@@ -8775,7 +9377,7 @@ export default function WorkHoursTracker({ onImport }) {
             </div>
           )}
         </div>
-      )}
+        ); })()}
 
       {/* Export Modal */}
       {showExport && (
