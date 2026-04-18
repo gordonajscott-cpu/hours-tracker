@@ -928,18 +928,18 @@ function AdminList({ title, items: rawItems, onUpdate, color, favourites, onTogg
   }, [items, favourites]);
 
   return (
-    <div style={{ background: "#ffffff", border: "1px solid #dadce0", borderRadius: 12, padding: "18px 20px", boxShadow: "0 1px 3px rgba(0,0,0,0.08)" }}>
-      <div style={{ fontSize: 14, fontWeight: 600, color: color || "#202124", textTransform: "uppercase", letterSpacing: "1px", marginBottom: 12 }}>{title}</div>
-      <div style={{ display: "flex", gap: 8, marginBottom: 14 }}>
+    <div style={{ background: "#ffffff", border: "1px solid #dadce0", borderRadius: 10, padding: "10px 14px", boxShadow: "0 1px 3px rgba(0,0,0,0.08)" }}>
+      <div style={{ fontSize: 13, fontWeight: 600, color: color || "#202124", textTransform: "uppercase", letterSpacing: "1px", marginBottom: 6 }}>{title}</div>
+      <div style={{ display: "flex", gap: 6, marginBottom: 8 }}>
         <input value={val} onChange={e => setVal(e.target.value)} onKeyDown={e => e.key === "Enter" && add()}
           placeholder={`Add ${title.toLowerCase()}...`}
-          style={{ flex: 1, background: "#ffffff", border: "1px solid #dadce0", color: "#202124", padding: "7px 10px", borderRadius: 6, fontFamily: "'Inter', 'Roboto', sans-serif", fontSize: 13, outline: "none" }} />
+          style={{ flex: 1, background: "#ffffff", border: "1px solid #dadce0", color: "#202124", padding: "5px 8px", borderRadius: 6, fontFamily: "'Inter', 'Roboto', sans-serif", fontSize: 12, outline: "none" }} />
         <button onClick={add} style={{
-          background: color || "#1a73e8", border: "none", color: "#ffffff", padding: "7px 14px",
-          borderRadius: 16, cursor: "pointer", fontFamily: "'Inter', 'Roboto', sans-serif", fontSize: 13, fontWeight: 700
+          background: color || "#1a73e8", border: "none", color: "#ffffff", padding: "5px 12px",
+          borderRadius: 16, cursor: "pointer", fontFamily: "'Inter', 'Roboto', sans-serif", fontSize: 12, fontWeight: 700
         }}>+</button>
       </div>
-      <div style={{ display: "flex", flexDirection: "column", gap: 2, maxHeight: 280, overflowY: "auto" }}>
+      <div style={{ display: "flex", flexDirection: "column", gap: 1, maxHeight: 280, overflowY: "auto" }}>
         {items.length === 0 && <div style={{ fontSize: 13, color: "#80868b", fontStyle: "italic" }}>No {title.toLowerCase()} added yet</div>}
         {displayOrder.map(({ item, idx: i }, displayIdx) => {
           const isFavItem = favSet.has(item);
@@ -956,16 +956,16 @@ function AdminList({ title, items: rawItems, onUpdate, color, favourites, onTogg
             onDrop={e => { e.preventDefault(); if (dragIdx !== null && dragIdx !== i) { moveItem(dragIdx, i); } setDragIdx(null); }}
             onDragEnd={() => setDragIdx(null)}
             style={{
-              display: "flex", alignItems: "center", justifyContent: "space-between", padding: "5px 10px",
-              background: dragIdx === i ? "#e8f0fe" : isFavItem ? "#fffbeb" : "#ffffff", borderRadius: 5, gap: 6,
+              display: "flex", alignItems: "center", justifyContent: "space-between", padding: "3px 8px",
+              background: dragIdx === i ? "#e8f0fe" : isFavItem ? "#fffbeb" : "#ffffff", borderRadius: 4, gap: 4,
               opacity: dragIdx === i ? 0.5 : 1, cursor: editIdx === i ? "default" : "grab"
             }}>
             {editIdx === i ? (
-              <div style={{ flex: 1, display: "flex", gap: 6 }}>
+              <div style={{ flex: 1, display: "flex", gap: 4 }}>
                 <input value={editVal} onChange={e => setEditVal(e.target.value)}
                   onKeyDown={e => e.key === "Enter" && saveEdit(i)}
                   autoFocus
-                  style={{ flex: 1, background: "#ffffff", border: "1px solid #1a73e8", color: "#202124", padding: "6px 10px", borderRadius: 4, fontFamily: "'Inter', 'Roboto', sans-serif", fontSize: 14, outline: "none" }} />
+                  style={{ flex: 1, background: "#ffffff", border: "1px solid #1a73e8", color: "#202124", padding: "4px 8px", borderRadius: 4, fontFamily: "'Inter', 'Roboto', sans-serif", fontSize: 12, outline: "none" }} />
                 <button onClick={() => saveEdit(i)} style={{ background: "#1a73e8", border: "none", color: "#fff", padding: "4px 12px", borderRadius: 4, cursor: "pointer", fontSize: 12, fontWeight: 600 }}>Save</button>
                 <button onClick={() => setEditIdx(null)} style={{ background: "#f1f3f4", border: "1px solid #dadce0", color: "#202124", padding: "4px 10px", borderRadius: 4, cursor: "pointer", fontSize: 12 }}>Cancel</button>
               </div>
@@ -1070,21 +1070,21 @@ function AdminCodeList({ title, items: rawItems, onUpdate, color }) {
   }, [items]);
 
   return (
-    <div style={{ background: "#ffffff", border: "1px solid #dadce0", borderRadius: 12, padding: "18px 20px", boxShadow: "0 1px 3px rgba(0,0,0,0.08)" }}>
-      <div style={{ fontSize: 14, fontWeight: 600, color: color || "#202124", textTransform: "uppercase", letterSpacing: "1px", marginBottom: 12 }}>{title}</div>
-      <div style={{ display: "flex", gap: 8, marginBottom: 14 }}>
+    <div style={{ background: "#ffffff", border: "1px solid #dadce0", borderRadius: 10, padding: "10px 14px", boxShadow: "0 1px 3px rgba(0,0,0,0.08)" }}>
+      <div style={{ fontSize: 13, fontWeight: 600, color: color || "#202124", textTransform: "uppercase", letterSpacing: "1px", marginBottom: 6 }}>{title}</div>
+      <div style={{ display: "flex", gap: 6, marginBottom: 8 }}>
         <input value={name} onChange={e => setName(e.target.value)} onKeyDown={e => e.key === "Enter" && add()}
           placeholder="Name..."
-          style={{ flex: 2, background: "#ffffff", border: "1px solid #dadce0", color: "#202124", padding: "7px 10px", borderRadius: 6, fontFamily: "'Inter', 'Roboto', sans-serif", fontSize: 13, outline: "none" }} />
+          style={{ flex: 2, background: "#ffffff", border: "1px solid #dadce0", color: "#202124", padding: "5px 8px", borderRadius: 6, fontFamily: "'Inter', 'Roboto', sans-serif", fontSize: 12, outline: "none" }} />
         <input value={code} onChange={e => setCode(e.target.value)} onKeyDown={e => e.key === "Enter" && add()}
           placeholder="Code..."
-          style={{ flex: 1, background: "#ffffff", border: "1px solid #dadce0", color: "#202124", padding: "7px 10px", borderRadius: 6, fontFamily: "'Inter', 'Roboto', sans-serif", fontSize: 13, outline: "none" }} />
+          style={{ flex: 1, background: "#ffffff", border: "1px solid #dadce0", color: "#202124", padding: "5px 8px", borderRadius: 6, fontFamily: "'Inter', 'Roboto', sans-serif", fontSize: 12, outline: "none" }} />
         <button onClick={add} style={{
-          background: color || "#1a73e8", border: "none", color: "#ffffff", padding: "7px 14px",
-          borderRadius: 16, cursor: "pointer", fontFamily: "'Inter', 'Roboto', sans-serif", fontSize: 13, fontWeight: 700
+          background: color || "#1a73e8", border: "none", color: "#ffffff", padding: "5px 12px",
+          borderRadius: 16, cursor: "pointer", fontFamily: "'Inter', 'Roboto', sans-serif", fontSize: 12, fontWeight: 700
         }}>+</button>
       </div>
-      <div style={{ display: "flex", flexDirection: "column", gap: 2, maxHeight: 280, overflowY: "auto" }}>
+      <div style={{ display: "flex", flexDirection: "column", gap: 1, maxHeight: 280, overflowY: "auto" }}>
         {items.length === 0 && <div style={{ fontSize: 13, color: "#80868b", fontStyle: "italic" }}>No {title.toLowerCase()} added yet</div>}
         {displayOrder.map(({ item, idx: i }, displayIdx) => {
           const itemName = getItemName(item);
@@ -1100,9 +1100,9 @@ function AdminCodeList({ title, items: rawItems, onUpdate, color }) {
               onDragOver={e => e.preventDefault()}
               onDrop={e => { e.preventDefault(); if (dragIdx !== null && dragIdx !== i) moveItem(dragIdx, i); setDragIdx(null); }}
               onDragEnd={() => setDragIdx(null)}
-              style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "5px 10px", background: dragIdx === i ? "#e8f0fe" : fav ? "#fffbeb" : "#ffffff", borderRadius: 5, gap: 6, opacity: dragIdx === i ? 0.5 : 1, cursor: editIdx === i ? "default" : "grab" }}>
+              style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "3px 8px", background: dragIdx === i ? "#e8f0fe" : fav ? "#fffbeb" : "#ffffff", borderRadius: 4, gap: 4, opacity: dragIdx === i ? 0.5 : 1, cursor: editIdx === i ? "default" : "grab" }}>
               {editIdx === i ? (
-                <div style={{ flex: 1, display: "flex", gap: 6 }}>
+                <div style={{ flex: 1, display: "flex", gap: 4 }}>
                   <input value={editName} onChange={e => setEditName(e.target.value)}
                     onKeyDown={e => e.key === "Enter" && saveEdit(i)} autoFocus
                     placeholder="Name..."
@@ -1204,15 +1204,15 @@ function ActivityTemplateEditor({ templates, onUpdate, color, favouriteActivitie
   }
 
   return (
-    <div style={{ background: "#ffffff", border: "1px solid #dadce0", borderRadius: 12, padding: "18px 20px", boxShadow: "0 1px 3px rgba(0,0,0,0.08)", gridColumn: "1 / -1" }}>
-      <div style={{ fontSize: 14, fontWeight: 600, color: color || "#202124", textTransform: "uppercase", letterSpacing: "1px", marginBottom: 12 }}>Activity Templates</div>
-      <div style={{ display: "flex", gap: 8, marginBottom: 14 }}>
+    <div style={{ background: "#ffffff", border: "1px solid #dadce0", borderRadius: 10, padding: "10px 14px", boxShadow: "0 1px 3px rgba(0,0,0,0.08)", gridColumn: "1 / -1" }}>
+      <div style={{ fontSize: 13, fontWeight: 600, color: color || "#202124", textTransform: "uppercase", letterSpacing: "1px", marginBottom: 6 }}>Activity Templates</div>
+      <div style={{ display: "flex", gap: 6, marginBottom: 8 }}>
         <input value={newName} onChange={e => setNewName(e.target.value)} onKeyDown={e => e.key === "Enter" && addTemplate()}
           placeholder="New template name..."
-          style={{ flex: 1, background: "#ffffff", border: "1px solid #dadce0", color: "#202124", padding: "7px 10px", borderRadius: 6, fontFamily: "'Inter', 'Roboto', sans-serif", fontSize: 13, outline: "none" }} />
+          style={{ flex: 1, background: "#ffffff", border: "1px solid #dadce0", color: "#202124", padding: "5px 8px", borderRadius: 6, fontFamily: "'Inter', 'Roboto', sans-serif", fontSize: 12, outline: "none" }} />
         <button onClick={addTemplate} style={{
-          background: color || "#8b5cf6", border: "none", color: "#ffffff", padding: "10px 16px",
-          borderRadius: 20, cursor: "pointer", fontFamily: "'Inter', 'Roboto', sans-serif", fontSize: 14, fontWeight: 700
+          background: color || "#8b5cf6", border: "none", color: "#ffffff", padding: "5px 12px",
+          borderRadius: 16, cursor: "pointer", fontFamily: "'Inter', 'Roboto', sans-serif", fontSize: 12, fontWeight: 700
         }}>+ Template</button>
       </div>
       {templates.length === 0 && <div style={{ fontSize: 13, color: "#80868b", fontStyle: "italic" }}>No activity templates yet. Create one and assign it to projects.</div>}
@@ -1361,31 +1361,31 @@ function ProjectEditor({ items: rawItems, templates, customers, onUpdate, color 
   const custNames = getItemNames(customers);
 
   return (
-    <div style={{ background: "#ffffff", border: "1px solid #dadce0", borderRadius: 12, padding: "18px 20px", boxShadow: "0 1px 3px rgba(0,0,0,0.08)" }}>
-      <div style={{ fontSize: 14, fontWeight: 600, color: color || "#202124", textTransform: "uppercase", letterSpacing: "1px", marginBottom: 12 }}>Projects</div>
-      <div style={{ display: "flex", gap: 8, marginBottom: 14, flexWrap: "wrap" }}>
+    <div style={{ background: "#ffffff", border: "1px solid #dadce0", borderRadius: 10, padding: "10px 14px", boxShadow: "0 1px 3px rgba(0,0,0,0.08)" }}>
+      <div style={{ fontSize: 13, fontWeight: 600, color: color || "#202124", textTransform: "uppercase", letterSpacing: "1px", marginBottom: 6 }}>Projects</div>
+      <div style={{ display: "flex", gap: 6, marginBottom: 8, flexWrap: "wrap" }}>
         <input value={name} onChange={e => setName(e.target.value)} onKeyDown={e => e.key === "Enter" && add()}
           placeholder="Name..."
-          style={{ flex: 2, minWidth: 120, background: "#ffffff", border: "1px solid #dadce0", color: "#202124", padding: "7px 10px", borderRadius: 6, fontFamily: "'Inter', 'Roboto', sans-serif", fontSize: 13, outline: "none" }} />
+          style={{ flex: 2, minWidth: 120, background: "#ffffff", border: "1px solid #dadce0", color: "#202124", padding: "5px 8px", borderRadius: 6, fontFamily: "'Inter', 'Roboto', sans-serif", fontSize: 12, outline: "none" }} />
         <input value={code} onChange={e => setCode(e.target.value)} onKeyDown={e => e.key === "Enter" && add()}
           placeholder="Code..."
-          style={{ flex: 1, minWidth: 80, background: "#ffffff", border: "1px solid #dadce0", color: "#202124", padding: "7px 10px", borderRadius: 6, fontFamily: "'Inter', 'Roboto', sans-serif", fontSize: 13, outline: "none" }} />
+          style={{ flex: 1, minWidth: 80, background: "#ffffff", border: "1px solid #dadce0", color: "#202124", padding: "5px 8px", borderRadius: 6, fontFamily: "'Inter', 'Roboto', sans-serif", fontSize: 12, outline: "none" }} />
         <select value={cust} onChange={e => setCust(e.target.value)}
-          style={{ flex: 1, minWidth: 120, background: "#ffffff", border: "1px solid #dadce0", color: cust ? "#202124" : "#80868b", padding: "10px 12px", borderRadius: 6, fontFamily: "'Inter', 'Roboto', sans-serif", fontSize: 14, outline: "none", cursor: "pointer" }}>
+          style={{ flex: 1, minWidth: 120, background: "#ffffff", border: "1px solid #dadce0", color: cust ? "#202124" : "#80868b", padding: "5px 8px", borderRadius: 6, fontFamily: "'Inter', 'Roboto', sans-serif", fontSize: 12, outline: "none", cursor: "pointer" }}>
           <option value="">Customer...</option>
           {custNames.map(n => <option key={n} value={n}>{n}</option>)}
         </select>
         <select value={tmpl} onChange={e => setTmpl(e.target.value)}
-          style={{ flex: 1, minWidth: 120, background: "#ffffff", border: "1px solid #dadce0", color: tmpl ? "#202124" : "#80868b", padding: "10px 12px", borderRadius: 6, fontFamily: "'Inter', 'Roboto', sans-serif", fontSize: 14, outline: "none", cursor: "pointer" }}>
+          style={{ flex: 1, minWidth: 120, background: "#ffffff", border: "1px solid #dadce0", color: tmpl ? "#202124" : "#80868b", padding: "5px 8px", borderRadius: 6, fontFamily: "'Inter', 'Roboto', sans-serif", fontSize: 12, outline: "none", cursor: "pointer" }}>
           <option value="">Template...</option>
           {tmplNames.map(n => <option key={n} value={n}>{n}</option>)}
         </select>
         <button onClick={add} style={{
-          background: color || "#1a73e8", border: "none", color: "#ffffff", padding: "10px 16px",
-          borderRadius: 20, cursor: "pointer", fontFamily: "'Inter', 'Roboto', sans-serif", fontSize: 14, fontWeight: 700
+          background: color || "#1a73e8", border: "none", color: "#ffffff", padding: "5px 12px",
+          borderRadius: 16, cursor: "pointer", fontFamily: "'Inter', 'Roboto', sans-serif", fontSize: 12, fontWeight: 700
         }}>+</button>
       </div>
-      <div style={{ display: "flex", flexDirection: "column", gap: 2, maxHeight: 320, overflowY: "auto" }}>
+      <div style={{ display: "flex", flexDirection: "column", gap: 1, maxHeight: 320, overflowY: "auto" }}>
         {items.length === 0 && <div style={{ fontSize: 13, color: "#80868b", fontStyle: "italic" }}>No projects added yet</div>}
         {displayOrder.map(({ item, idx: i }, displayIdx) => {
           const itemName = getItemName(item);
@@ -1517,26 +1517,26 @@ function WorkOrderEditor({ items: rawItems, projects, onUpdate, color }) {
   const projNames = getItemNames(projects);
 
   return (
-    <div style={{ background: "#ffffff", border: "1px solid #dadce0", borderRadius: 12, padding: "18px 20px", boxShadow: "0 1px 3px rgba(0,0,0,0.08)" }}>
-      <div style={{ fontSize: 14, fontWeight: 600, color: color || "#202124", textTransform: "uppercase", letterSpacing: "1px", marginBottom: 12 }}>Work Orders</div>
-      <div style={{ display: "flex", gap: 8, marginBottom: 14, flexWrap: "wrap" }}>
+    <div style={{ background: "#ffffff", border: "1px solid #dadce0", borderRadius: 10, padding: "10px 14px", boxShadow: "0 1px 3px rgba(0,0,0,0.08)" }}>
+      <div style={{ fontSize: 13, fontWeight: 600, color: color || "#202124", textTransform: "uppercase", letterSpacing: "1px", marginBottom: 6 }}>Work Orders</div>
+      <div style={{ display: "flex", gap: 6, marginBottom: 8, flexWrap: "wrap" }}>
         <input value={name} onChange={e => setName(e.target.value)} onKeyDown={e => e.key === "Enter" && add()}
           placeholder="Name..."
-          style={{ flex: 2, minWidth: 120, background: "#ffffff", border: "1px solid #dadce0", color: "#202124", padding: "7px 10px", borderRadius: 6, fontFamily: "'Inter', 'Roboto', sans-serif", fontSize: 13, outline: "none" }} />
+          style={{ flex: 2, minWidth: 120, background: "#ffffff", border: "1px solid #dadce0", color: "#202124", padding: "5px 8px", borderRadius: 6, fontFamily: "'Inter', 'Roboto', sans-serif", fontSize: 12, outline: "none" }} />
         <input value={code} onChange={e => setCode(e.target.value)} onKeyDown={e => e.key === "Enter" && add()}
           placeholder="Code..."
-          style={{ flex: 1, minWidth: 80, background: "#ffffff", border: "1px solid #dadce0", color: "#202124", padding: "7px 10px", borderRadius: 6, fontFamily: "'Inter', 'Roboto', sans-serif", fontSize: 13, outline: "none" }} />
+          style={{ flex: 1, minWidth: 80, background: "#ffffff", border: "1px solid #dadce0", color: "#202124", padding: "5px 8px", borderRadius: 6, fontFamily: "'Inter', 'Roboto', sans-serif", fontSize: 12, outline: "none" }} />
         <select value={proj} onChange={e => setProj(e.target.value)}
-          style={{ flex: 1, minWidth: 120, background: "#ffffff", border: "1px solid #dadce0", color: proj ? "#202124" : "#80868b", padding: "10px 12px", borderRadius: 6, fontFamily: "'Inter', 'Roboto', sans-serif", fontSize: 14, outline: "none", cursor: "pointer" }}>
+          style={{ flex: 1, minWidth: 120, background: "#ffffff", border: "1px solid #dadce0", color: proj ? "#202124" : "#80868b", padding: "5px 8px", borderRadius: 6, fontFamily: "'Inter', 'Roboto', sans-serif", fontSize: 12, outline: "none", cursor: "pointer" }}>
           <option value="">Project...</option>
           {projNames.map(n => <option key={n} value={n}>{n}</option>)}
         </select>
         <button onClick={add} style={{
-          background: color || "#1a73e8", border: "none", color: "#ffffff", padding: "10px 16px",
-          borderRadius: 20, cursor: "pointer", fontFamily: "'Inter', 'Roboto', sans-serif", fontSize: 14, fontWeight: 700
+          background: color || "#1a73e8", border: "none", color: "#ffffff", padding: "5px 12px",
+          borderRadius: 16, cursor: "pointer", fontFamily: "'Inter', 'Roboto', sans-serif", fontSize: 12, fontWeight: 700
         }}>+</button>
       </div>
-      <div style={{ display: "flex", flexDirection: "column", gap: 2, maxHeight: 320, overflowY: "auto" }}>
+      <div style={{ display: "flex", flexDirection: "column", gap: 1, maxHeight: 320, overflowY: "auto" }}>
         {items.length === 0 && <div style={{ fontSize: 13, color: "#80868b", fontStyle: "italic" }}>No work orders added yet</div>}
         {displayOrder.map(({ item, idx: i }, displayIdx) => {
           const itemName = getItemName(item);
@@ -5050,7 +5050,7 @@ export default function WorkHoursTracker({ onImport }) {
               </div>
             )}
 
-            <div className="wht-grid-2col" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+            <div className="wht-grid-2col" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
               {/* Left: Today's calendar mini */}
               <div style={{ background: "#fff", border: "1px solid #e8eaed", borderRadius: 12, padding: "16px 20px" }}>
                 <div style={{ fontSize: 15, fontWeight: 700, color: "#202124", marginBottom: 12 }}>📅 Today's Schedule</div>
@@ -9033,7 +9033,7 @@ export default function WorkHoursTracker({ onImport }) {
 
           <AdminCodeList title="Customers" items={activeConfig.customers} onUpdate={cfgUpdate('customers')} color="#1a73e8" />
 
-          <div style={{ marginTop: 16 }}>
+          <div style={{ marginTop: 10 }}>
             <ProjectEditor
               items={activeConfig.projects}
               templates={activeConfig.activityTemplates || []}
@@ -9043,7 +9043,7 @@ export default function WorkHoursTracker({ onImport }) {
             />
           </div>
 
-          <div style={{ marginTop: 16 }}>
+          <div style={{ marginTop: 10 }}>
             <WorkOrderEditor
               items={activeConfig.workOrders}
               projects={activeConfig.projects || []}
@@ -9053,13 +9053,13 @@ export default function WorkHoursTracker({ onImport }) {
           </div>
 
           {/* ── SECTION 2: ACTIVITIES & CLASSIFICATION ── */}
-          <div style={{ fontSize: 12, fontWeight: 700, color: "#8b5cf6", textTransform: "uppercase", letterSpacing: "1.5px", marginTop: 28, marginBottom: 10, padding: "0 4px", display: "flex", alignItems: "center", gap: 8 }}>
+          <div style={{ fontSize: 12, fontWeight: 700, color: "#8b5cf6", textTransform: "uppercase", letterSpacing: "1.5px", marginTop: 18, marginBottom: 6, padding: "0 4px", display: "flex", alignItems: "center", gap: 8 }}>
             <div style={{ flex: 1, height: 1, background: "#d4c5f2" }} />
             Activities & Classification
             <div style={{ flex: 1, height: 1, background: "#d4c5f2" }} />
           </div>
 
-          <div style={{ marginBottom: 16 }}>
+          <div style={{ marginBottom: 10 }}>
             <ActivityTemplateEditor
               templates={activeConfig.activityTemplates || []}
               onUpdate={cfgUpdate('activityTemplates')}
@@ -9072,7 +9072,7 @@ export default function WorkHoursTracker({ onImport }) {
             />
           </div>
 
-          <div className="wht-grid-2col" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+          <div className="wht-grid-2col" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
             <AdminList title="Default Activities" items={activeConfig.activities} onUpdate={cfgUpdate('activities')} color="#80868b"
               favourites={config.favouriteActivities || []}
               onToggleFav={name => setConfig(prev => {
@@ -9096,13 +9096,13 @@ export default function WorkHoursTracker({ onImport }) {
           </div>
 
           {/* ── SECTION 3: RATES & ROLES ── */}
-          <div style={{ fontSize: 12, fontWeight: 700, color: "#e37400", textTransform: "uppercase", letterSpacing: "1.5px", marginTop: 28, marginBottom: 10, padding: "0 4px", display: "flex", alignItems: "center", gap: 8 }}>
+          <div style={{ fontSize: 12, fontWeight: 700, color: "#e37400", textTransform: "uppercase", letterSpacing: "1.5px", marginTop: 18, marginBottom: 6, padding: "0 4px", display: "flex", alignItems: "center", gap: 8 }}>
             <div style={{ flex: 1, height: 1, background: "#f2d8b5" }} />
             Rates & Roles
             <div style={{ flex: 1, height: 1, background: "#f2d8b5" }} />
           </div>
 
-          <div className="wht-grid-2col" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+          <div className="wht-grid-2col" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
             <AdminList title="Roles" items={activeConfig.roles || []} onUpdate={cfgUpdate('roles')} color="#e37400" />
             <AdminList title="Bill Rates" items={activeConfig.billRates || []} onUpdate={cfgUpdate('billRates')} color="#0d904f"
               favourites={config.favouriteBillRates || []}
@@ -9116,7 +9116,7 @@ export default function WorkHoursTracker({ onImport }) {
           )}
 
           {/* ── SECTION: BANK HOLIDAYS ── */}
-          <div style={{ fontSize: 12, fontWeight: 700, color: "#d93025", textTransform: "uppercase", letterSpacing: "1.5px", marginTop: 28, marginBottom: 10, padding: "0 4px", display: "flex", alignItems: "center", gap: 8 }}>
+          <div style={{ fontSize: 12, fontWeight: 700, color: "#d93025", textTransform: "uppercase", letterSpacing: "1.5px", marginTop: 18, marginBottom: 6, padding: "0 4px", display: "flex", alignItems: "center", gap: 8 }}>
             <div style={{ flex: 1, height: 1, background: "#f5c6c2" }} />
             Bank Holidays
             <div style={{ flex: 1, height: 1, background: "#f5c6c2" }} />
@@ -9210,7 +9210,7 @@ export default function WorkHoursTracker({ onImport }) {
           </div>
 
           {/* ── SECTION 4: DEFAULTS & SETTINGS ── */}
-          <div style={{ fontSize: 12, fontWeight: 700, color: "#34a853", textTransform: "uppercase", letterSpacing: "1.5px", marginTop: 28, marginBottom: 10, padding: "0 4px", display: "flex", alignItems: "center", gap: 8 }}>
+          <div style={{ fontSize: 12, fontWeight: 700, color: "#34a853", textTransform: "uppercase", letterSpacing: "1.5px", marginTop: 18, marginBottom: 6, padding: "0 4px", display: "flex", alignItems: "center", gap: 8 }}>
             <div style={{ flex: 1, height: 1, background: "#b5e0c5" }} />
             Defaults & Settings
             <div style={{ flex: 1, height: 1, background: "#b5e0c5" }} />
@@ -9290,7 +9290,7 @@ export default function WorkHoursTracker({ onImport }) {
           </div>
 
           {/* ── SECTION 5: DATA MANAGEMENT ── */}
-          <div style={{ fontSize: 12, fontWeight: 700, color: "#5f6368", textTransform: "uppercase", letterSpacing: "1.5px", marginTop: 28, marginBottom: 10, padding: "0 4px", display: "flex", alignItems: "center", gap: 8 }}>
+          <div style={{ fontSize: 12, fontWeight: 700, color: "#5f6368", textTransform: "uppercase", letterSpacing: "1.5px", marginTop: 18, marginBottom: 6, padding: "0 4px", display: "flex", alignItems: "center", gap: 8 }}>
             <div style={{ flex: 1, height: 1, background: "#dadce0" }} />
             Data Management
             <div style={{ flex: 1, height: 1, background: "#dadce0" }} />
