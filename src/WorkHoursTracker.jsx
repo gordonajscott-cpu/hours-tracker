@@ -1309,7 +1309,7 @@ function ActivityTemplateEditor({ templates, onUpdate, color, favouriteActivitie
 }
 
 // Project Editor with template assignment
-function ProjectEditor({ items: rawItems, templates, customers, onUpdate, color }) {
+function ProjectEditor({ items: rawItems, templates, customers, onUpdate, color, personalMode }) {
   const items = rawItems || [];
   const [name, setName] = useState("");
   const [code, setCode] = useState("");
@@ -1325,7 +1325,7 @@ function ProjectEditor({ items: rawItems, templates, customers, onUpdate, color 
     if (name.trim()) {
       const exists = items.some(it => getItemName(it) === name.trim());
       if (!exists) {
-        onUpdate([...items, { name: name.trim(), code: code.trim(), activityTemplate: tmpl, customer: cust }]);
+        onUpdate([...items, { name: name.trim(), code: personalMode ? "" : code.trim(), activityTemplate: tmpl, customer: cust }]);
         setName(""); setCode(""); setTmpl(""); setCust("");
       }
     }
@@ -1366,12 +1366,12 @@ function ProjectEditor({ items: rawItems, templates, customers, onUpdate, color 
         <input value={name} onChange={e => setName(e.target.value)} onKeyDown={e => e.key === "Enter" && add()}
           placeholder="Name..."
           style={{ flex: 2, minWidth: 120, background: "#ffffff", border: "1px solid #dadce0", color: "#202124", padding: "5px 8px", borderRadius: 6, fontFamily: "'Inter', 'Roboto', sans-serif", fontSize: 12, outline: "none" }} />
-        <input value={code} onChange={e => setCode(e.target.value)} onKeyDown={e => e.key === "Enter" && add()}
+        {!personalMode && <input value={code} onChange={e => setCode(e.target.value)} onKeyDown={e => e.key === "Enter" && add()}
           placeholder="Code..."
-          style={{ flex: 1, minWidth: 80, background: "#ffffff", border: "1px solid #dadce0", color: "#202124", padding: "5px 8px", borderRadius: 6, fontFamily: "'Inter', 'Roboto', sans-serif", fontSize: 12, outline: "none" }} />
+          style={{ flex: 1, minWidth: 80, background: "#ffffff", border: "1px solid #dadce0", color: "#202124", padding: "5px 8px", borderRadius: 6, fontFamily: "'Inter', 'Roboto', sans-serif", fontSize: 12, outline: "none" }} />}
         <select value={cust} onChange={e => setCust(e.target.value)}
           style={{ flex: 1, minWidth: 120, background: "#ffffff", border: "1px solid #dadce0", color: cust ? "#202124" : "#80868b", padding: "5px 8px", borderRadius: 6, fontFamily: "'Inter', 'Roboto', sans-serif", fontSize: 12, outline: "none", cursor: "pointer" }}>
-          <option value="">Customer...</option>
+          <option value="">{personalMode ? "Area..." : "Customer..."}</option>
           {custNames.map(n => <option key={n} value={n}>{n}</option>)}
         </select>
         <select value={tmpl} onChange={e => setTmpl(e.target.value)}
@@ -1413,21 +1413,21 @@ function ProjectEditor({ items: rawItems, templates, customers, onUpdate, color 
                     onKeyDown={e => e.key === "Enter" && saveEdit(i)} placeholder="Name..."
                     autoFocus
                     style={{ flex: 2, background: "#ffffff", border: "1px solid #1a73e8", color: "#202124", padding: "6px 10px", borderRadius: 4, fontFamily: "'Inter', 'Roboto', sans-serif", fontSize: 14, outline: "none" }} />
-                  <input value={editCode} onChange={e => setEditCode(e.target.value)}
+                  {!personalMode && <input value={editCode} onChange={e => setEditCode(e.target.value)}
                     onKeyDown={e => e.key === "Enter" && saveEdit(i)} placeholder="Code..."
-                    style={{ flex: 1, background: "#ffffff", border: "1px solid #1a73e8", color: "#202124", padding: "6px 10px", borderRadius: 4, fontFamily: "'Inter', 'Roboto', sans-serif", fontSize: 14, outline: "none" }} />
+                    style={{ flex: 1, background: "#ffffff", border: "1px solid #1a73e8", color: "#202124", padding: "6px 10px", borderRadius: 4, fontFamily: "'Inter', 'Roboto', sans-serif", fontSize: 14, outline: "none" }} />}
                   <button onClick={() => saveEdit(i)} style={{ background: "#1a73e8", border: "none", color: "#fff", padding: "4px 12px", borderRadius: 4, cursor: "pointer", fontSize: 12, fontWeight: 600 }}>Save</button>
                   <button onClick={() => setEditIdx(null)} style={{ background: "#f1f3f4", border: "1px solid #dadce0", color: "#202124", padding: "4px 10px", borderRadius: 4, cursor: "pointer", fontSize: 12 }}>Cancel</button>
                 </div>
               ) : (
                 <div onClick={() => startEdit(i)} style={{ flex: "1 1 auto", minWidth: 100, cursor: "pointer" }} title="Click to edit">
                   <span style={{ fontSize: 15, color: "#202124" }}>{itemName}</span>
-                  {itemCode && <span style={{ fontSize: 13, color: "#80868b", marginLeft: 8 }}>({itemCode})</span>}
+                  {!personalMode && itemCode && <span style={{ fontSize: 13, color: "#80868b", marginLeft: 8 }}>({itemCode})</span>}
                 </div>
               )}
               <select value={itemCust} onChange={e => updateField(i, "customer", e.target.value)}
                 style={{ background: "#f8f9fa", border: "1px solid #dadce0", color: itemCust ? "#202124" : "#80868b", padding: "5px 10px", borderRadius: 6, fontFamily: "'Inter', 'Roboto', sans-serif", fontSize: 13, outline: "none", cursor: "pointer", minWidth: 120 }}>
-                <option value="">No customer</option>
+                <option value="">{personalMode ? "No area" : "No customer"}</option>
                 {custNames.map(n => <option key={n} value={n}>{n}</option>)}
               </select>
               <select value={itemTmpl} onChange={e => updateField(i, "activityTemplate", e.target.value)}
@@ -1768,9 +1768,13 @@ export default function WorkHoursTracker({ onImport }) {
 
   // Organization-aware config resolution
   const activeProfile = profiles.find(p => p.id === activeProfileId);
+  const activeCategory = activeProfile?.category || "work";
+  const isPersonal = activeCategory === "personal";
   const isOrgProfile = !!(activeProfile?.organization_id);
   const isOrgAdmin = org?.role === 'admin';
   const orgId = org?.organizations?.id || org?.org_id || null;
+  const customerLabel = isPersonal ? "Area" : "Customer";
+  const workOrderLabel = "Work Order";
 
   const activeConfig = useMemo(() => {
     if (!isOrgProfile || !orgConfig) return config;
@@ -2162,7 +2166,7 @@ export default function WorkHoursTracker({ onImport }) {
 
   function exportTimesheet() {
     try {
-      const rows = [["Date", "Day", "Start", "End", "Hours", "Note", "Activity", "Work Order", "Project", "Customer", "Role", "Bill Rate", "Tags"].join(",")];
+      const rows = [["Date", "Day", "Start", "End", "Hours", "Note", "Activity", !isPersonal && "Work Order", "Project", customerLabel, "Role", "Bill Rate", "Tags"].filter(Boolean).join(",")];
       const sortedKeys = Object.keys(allData).sort();
       sortedKeys.forEach(key => {
         const parts = key.split("-W");
@@ -2179,7 +2183,7 @@ export default function WorkHoursTracker({ onImport }) {
             const s = parseTime(ent.start), e = parseTime(ent.end);
             const hrs = s !== null && e !== null ? fmtH(Math.max(0, e - s)) : "0";
             const esc = v => `"${(v || "").replace(/"/g, '""')}"`;
-            rows.push([dateStr, dayName, ent.start || "", ent.end || "", hrs, esc(ent.note), esc(ent.activity), esc(ent.workOrder), esc(ent.project), esc(ent.customer), esc(ent.role), esc(ent.billRate), esc((ent.tags || []).join("; "))].join(","));
+            rows.push([dateStr, dayName, ent.start || "", ent.end || "", hrs, esc(ent.note), esc(ent.activity), !isPersonal && esc(ent.workOrder), esc(ent.project), esc(ent.customer), esc(ent.role), esc(ent.billRate), esc((ent.tags || []).join("; "))].filter(v => v !== false).join(","));
           });
         });
       });
@@ -4935,6 +4939,7 @@ export default function WorkHoursTracker({ onImport }) {
             display: "grid", gridTemplateColumns: isMobile ? "1fr 1fr" : "1fr 1fr 1fr", gap: 10,
             padding: isMobile ? "12px 12px" : "14px 20px", borderTop: "1px solid #dadce0"
           }}>
+            {!isPersonal && (
             <div>
               <div style={{ fontSize: 13, color: "#5f6368", textTransform: "uppercase", letterSpacing: "1px", marginBottom: 5 }}>Work Order</div>
               <FavSel value={timerWorkOrder} onChange={v => {
@@ -4946,6 +4951,7 @@ export default function WorkHoursTracker({ onImport }) {
                 }
               }} options={getItemNames(activeConfig.workOrders)} configItems={activeConfig.workOrders} placeholder="—" />
             </div>
+            )}
             <div>
               <div style={{ fontSize: 13, color: "#5f6368", textTransform: "uppercase", letterSpacing: "1px", marginBottom: 5 }}>Activity</div>
               <FavSel value={timerActivity} onChange={setTimerActivity} options={getActivitiesForProject(timerProject)} favouriteNames={config.favouriteActivities || []} placeholder="—" />
@@ -4955,7 +4961,7 @@ export default function WorkHoursTracker({ onImport }) {
               <FavSel value={timerProject} onChange={v => { setTimerProject(v); setTimerWorkOrder(""); }} options={getProjectsForCustomer(timerCustomer)} configItems={activeConfig.projects} placeholder="—" />
             </div>
             <div>
-              <div style={{ fontSize: 13, color: "#5f6368", textTransform: "uppercase", letterSpacing: "1px", marginBottom: 5 }}>Customer</div>
+              <div style={{ fontSize: 13, color: "#5f6368", textTransform: "uppercase", letterSpacing: "1px", marginBottom: 5 }}>{customerLabel}</div>
               <FavSel value={timerCustomer} onChange={v => { setTimerCustomer(v); setTimerProject(""); setTimerWorkOrder(""); }} options={getItemNames(activeConfig.customers)} configItems={activeConfig.customers} placeholder="—" />
             </div>
             <div>
@@ -5550,6 +5556,7 @@ export default function WorkHoursTracker({ onImport }) {
                       }}
                     />
                   </div>
+                  {!isPersonal && (
                   <div>
                     <div style={{ fontSize: 13, color: "#5f6368", marginBottom: 5 }}>WORK ORDER</div>
                     <FavSel value={selectedEntry.workOrder} onChange={v => {
@@ -5565,6 +5572,7 @@ export default function WorkHoursTracker({ onImport }) {
                       }
                     }} options={getItemNames(activeConfig.workOrders)} configItems={activeConfig.workOrders} placeholder="— Select —" />
                   </div>
+                  )}
                   <div>
                     <div style={{ fontSize: 13, color: "#5f6368", marginBottom: 5 }}>ACTIVITY</div>
                     <FavSel value={selectedEntry.activity} onChange={v => updateEntry(selectedEntryId, "activity", v)} options={getActivitiesForProject(selectedEntry.project)} favouriteNames={config.favouriteActivities || []} placeholder="— Select —" />
@@ -5576,7 +5584,7 @@ export default function WorkHoursTracker({ onImport }) {
                     }} options={getProjectsForCustomer(selectedEntry.customer)} configItems={activeConfig.projects} placeholder="— Select —" />
                   </div>
                   <div>
-                    <div style={{ fontSize: 13, color: "#5f6368", marginBottom: 5 }}>CUSTOMER</div>
+                    <div style={{ fontSize: 13, color: "#5f6368", marginBottom: 5 }}>{customerLabel.toUpperCase()}</div>
                     <FavSel value={selectedEntry.customer} onChange={v => {
                       updateEntryFields(selectedEntryId, { customer: v, project: "", workOrder: "" });
                     }} options={getItemNames(activeConfig.customers)} configItems={activeConfig.customers} placeholder="— Select —" />
@@ -6166,7 +6174,7 @@ export default function WorkHoursTracker({ onImport }) {
               <div>
                 <div style={{ display: "flex", gap: 6, alignItems: "center", marginBottom: 12, flexWrap: "wrap" }}>
                   <span style={{ fontSize: 13, color: "#5f6368", fontWeight: 600 }}>Columns:</span>
-                  {[["status","Status"],["priority","Priority"],["due","Due Date"],["importance","Importance"],["project","Project"],["customer","Customer"],["workOrder","Work Order"]].map(([k,l]) => (
+                  {[["status","Status"],["priority","Priority"],["due","Due Date"],["importance","Importance"],["project","Project"],["customer",customerLabel],!isPersonal && ["workOrder","Work Order"]].filter(Boolean).map(([k,l]) => (
                     <button key={k} onClick={() => setKanbanSort(k)} style={{
                       fontSize: 12, fontWeight: 600, padding: "4px 12px", borderRadius: 14, cursor: "pointer",
                       background: kanbanSort === k ? "#1a73e8" : "#fff",
@@ -6846,8 +6854,8 @@ export default function WorkHoursTracker({ onImport }) {
                                   <div style={{ padding: "8px 10px 8px 28px", fontSize: 12, color: "#5f6368" }}>
                                     <div style={{ display: "flex", gap: 16, flexWrap: "wrap", marginBottom: 4 }}>
                                       {task.activity && <span>Activity: <b>{task.activity}</b></span>}
-                                      {task.customer && <span>Customer: <b>{task.customer}</b></span>}
-                                      {task.workOrder && <span>WO: <b>{task.workOrder}</b></span>}
+                                      {task.customer && <span>{customerLabel}: <b>{task.customer}</b></span>}
+                                      {!isPersonal && task.workOrder && <span>WO: <b>{task.workOrder}</b></span>}
                                       <span>Importance: <b>{task.importance}★</b></span>
                                       {task.recurring && <span>🔄 {task.recurFrequency}</span>}
                                     </div>
@@ -7411,7 +7419,7 @@ export default function WorkHoursTracker({ onImport }) {
             ))}
             <div style={{ width: 1, height: 20, background: "#dadce0", margin: "0 4px" }} />
             <span style={{ fontSize: 13, color: "#5f6368", fontWeight: 600 }}>Group:</span>
-            {[["none","None"],["project","Project"],["customer","Customer"],["workOrder","Work Order"]].map(([k,l]) => (
+            {[["none","None"],["project","Project"],["customer",customerLabel],!isPersonal && ["workOrder","Work Order"]].filter(Boolean).map(([k,l]) => (
               <button key={k} onClick={() => setTaskGroupBy(k)} style={{
                 fontSize: 12, fontWeight: 600, padding: "5px 10px", borderRadius: 16, cursor: "pointer",
                 background: taskGroupBy === k ? "#e8f0fe" : "#fff",
@@ -7706,16 +7714,18 @@ export default function WorkHoursTracker({ onImport }) {
 
                   {/* Dropdowns + Actions */}
                   <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
+                    {!isPersonal && (
                     <FavSel small value={task.workOrder} onChange={v => {
                       if (v) { const chain = lookupWorkOrderChain(v); updateTask(task.id, { workOrder: v, ...(chain.project ? { project: chain.project } : {}), ...(chain.customer ? { customer: chain.customer } : {}) }); }
                       else updateTask(task.id, { workOrder: "" });
                     }} options={getWorkOrdersForProject(task.project)} configItems={activeConfig.workOrders} placeholder="Work Order..." />
+                    )}
                     <FavSel small value={task.activity} onChange={v => updateTask(task.id, { activity: v })}
                       options={getActivitiesForProject(task.project)} favouriteNames={config.favouriteActivities || []} placeholder="Activity..." />
                     <FavSel small value={task.project} onChange={v => updateTask(task.id, { project: v, workOrder: "" })}
                       options={getItemNames(activeConfig.projects)} configItems={activeConfig.projects} placeholder="Project..." />
                     <FavSel small value={task.customer} onChange={v => updateTask(task.id, { customer: v, project: "", workOrder: "" })}
-                      options={getItemNames(activeConfig.customers)} configItems={activeConfig.customers} placeholder="Customer..." />
+                      options={getItemNames(activeConfig.customers)} configItems={activeConfig.customers} placeholder={isPersonal ? "Area..." : "Customer..."} />
                     <div style={{ width: "100%", marginTop: 4 }}>
                       <TagMultiSelect
                         selected={task.tags || []}
@@ -7992,7 +8002,7 @@ export default function WorkHoursTracker({ onImport }) {
           }}>
             <span style={{ fontSize: 13, color: "#5f6368", textTransform: "uppercase", letterSpacing: "1px" }}>Group by</span>
             <div style={{ display: "flex", gap: 3 }}>
-              {[["none","None"],["activity","Activity"],["role","Role"],["billRate","Bill Rate"],["workOrder","Work Order"],["project","Project"],["customer","Customer"],["tag","Tags"]].map(([k, l]) => (
+              {[["none","None"],["activity","Activity"],["role","Role"],["billRate","Bill Rate"],!isPersonal && ["workOrder","Work Order"],["project","Project"],["customer",customerLabel],["tag","Tags"]].filter(Boolean).map(([k, l]) => (
                 <button key={k} onClick={() => setReportGroup(k)} style={{
                   fontFamily: "'Inter', 'Roboto', sans-serif", fontSize: 13, fontWeight: 600, padding: "7px 14px",
                   background: reportGroup === k ? "#1a73e8" : "#ffffff",
@@ -8011,7 +8021,7 @@ export default function WorkHoursTracker({ onImport }) {
           }}>
             <span style={{ fontSize: 13, color: "#5f6368", textTransform: "uppercase", letterSpacing: "1px" }}>Filter by</span>
             <div style={{ display: "flex", gap: 3 }}>
-              {[["none","None"],["activity","Activity"],["role","Role"],["billRate","Bill Rate"],["workOrder","Work Order"],["project","Project"],["customer","Customer"],["tag","Tag"]].map(([k, l]) => (
+              {[["none","None"],["activity","Activity"],["role","Role"],["billRate","Bill Rate"],!isPersonal && ["workOrder","Work Order"],["project","Project"],["customer",customerLabel],["tag","Tag"]].filter(Boolean).map(([k, l]) => (
                 <button key={k} onClick={() => { setReportFilterField(k); setReportFilterValues([]); }} style={{
                   fontFamily: "'Inter', 'Roboto', sans-serif", fontSize: 13, fontWeight: 600, padding: "7px 14px",
                   background: reportFilterField === k ? "#e37400" : "#ffffff",
@@ -8166,7 +8176,7 @@ export default function WorkHoursTracker({ onImport }) {
             const data = groupedReportData || [];
             const total = data.reduce((s, [, h]) => s + h, 0);
             const maxVal = data.length > 0 ? data[0][1] : 1;
-            const groupLabel = { customer: "Customer", project: "Project", workOrder: "Work Order", activity: "Activity", role: "Role", billRate: "Bill Rate", tag: "Tag" }[reportGroup];
+            const groupLabel = { customer: customerLabel, project: "Project", workOrder: "Work Order", activity: "Activity", role: "Role", billRate: "Bill Rate", tag: "Tag" }[reportGroup];
             const subLabel = { customer: "Project", project: "Activity", workOrder: "Activity", activity: "Project", role: "Project", billRate: "Project", tag: "Project" }[reportGroup];
             const periodLabel = reportView === "daily"
               ? `${DAYS[(reportDate.getDay()+6)%7]} ${reportDate.getDate()} ${MONTHS[reportDate.getMonth()].slice(0,3)}`
@@ -8461,7 +8471,7 @@ export default function WorkHoursTracker({ onImport }) {
                       </colgroup>
                       <thead>
                         <tr style={{ background: "#f8f9fa" }}>
-                          <th style={{ textAlign: "left", padding: "10px 12px", fontSize: 12, fontWeight: 700, color: "#5f6368", textTransform: "uppercase", borderBottom: "2px solid #dadce0" }}>Project / Work Order / Activity</th>
+                          <th style={{ textAlign: "left", padding: "10px 12px", fontSize: 12, fontWeight: 700, color: "#5f6368", textTransform: "uppercase", borderBottom: "2px solid #dadce0" }}>{isPersonal ? "Project / Activity" : "Project / Work Order / Activity"}</th>
                           {SHORT_DAYS.map((d, i) => (
                             <th key={d} style={{ textAlign: "right", padding: "10px 8px", fontSize: 12, fontWeight: 700, color: "#5f6368", textTransform: "uppercase", borderBottom: "2px solid #dadce0" }}>
                               <div>{d}</div>
@@ -9050,30 +9060,46 @@ export default function WorkHoursTracker({ onImport }) {
           <>
           <div style={{ fontSize: 12, fontWeight: 700, color: "#1a73e8", textTransform: "uppercase", letterSpacing: "1.5px", marginBottom: 10, padding: "0 4px", display: "flex", alignItems: "center", gap: 8 }}>
             <div style={{ flex: 1, height: 1, background: "#c5d7f2" }} />
-            {isOrgProfile ? "Organization Config" : "Work Structure"}
+            {isOrgProfile ? "Organization Config" : isPersonal ? "Personal Structure" : "Work Structure"}
             <div style={{ flex: 1, height: 1, background: "#c5d7f2" }} />
           </div>
 
-          <AdminCodeList title="Customers" items={activeConfig.customers} onUpdate={cfgUpdate('customers')} color="#1a73e8" />
-
-          <div style={{ marginTop: 10 }}>
-            <ProjectEditor
-              items={activeConfig.projects}
-              templates={activeConfig.activityTemplates || []}
-              customers={activeConfig.customers || []}
-              onUpdate={cfgUpdate('projects')}
-              color="#1a73e8"
-            />
-          </div>
-
-          <div style={{ marginTop: 10 }}>
-            <WorkOrderEditor
-              items={activeConfig.workOrders}
-              projects={activeConfig.projects || []}
-              onUpdate={cfgUpdate('workOrders')}
-              color="#1a73e8"
-            />
-          </div>
+          {isPersonal ? (
+            <>
+              <AdminList title="Areas" items={activeConfig.customers} onUpdate={cfgUpdate('customers')} color="#1a73e8" />
+              <div style={{ marginTop: 10 }}>
+                <ProjectEditor
+                  items={activeConfig.projects}
+                  templates={activeConfig.activityTemplates || []}
+                  customers={activeConfig.customers || []}
+                  onUpdate={cfgUpdate('projects')}
+                  color="#1a73e8"
+                  personalMode
+                />
+              </div>
+            </>
+          ) : (
+            <>
+              <AdminCodeList title="Customers" items={activeConfig.customers} onUpdate={cfgUpdate('customers')} color="#1a73e8" />
+              <div style={{ marginTop: 10 }}>
+                <ProjectEditor
+                  items={activeConfig.projects}
+                  templates={activeConfig.activityTemplates || []}
+                  customers={activeConfig.customers || []}
+                  onUpdate={cfgUpdate('projects')}
+                  color="#1a73e8"
+                />
+              </div>
+              <div style={{ marginTop: 10 }}>
+                <WorkOrderEditor
+                  items={activeConfig.workOrders}
+                  projects={activeConfig.projects || []}
+                  onUpdate={cfgUpdate('workOrders')}
+                  color="#1a73e8"
+                />
+              </div>
+            </>
+          )}
 
           {/* ── SECTION 2: ACTIVITIES & CLASSIFICATION ── */}
           <div style={{ fontSize: 12, fontWeight: 700, color: "#8b5cf6", textTransform: "uppercase", letterSpacing: "1.5px", marginTop: 18, marginBottom: 6, padding: "0 4px", display: "flex", alignItems: "center", gap: 8 }}>
@@ -9268,17 +9294,19 @@ export default function WorkHoursTracker({ onImport }) {
             <div style={{ fontSize: 13, fontWeight: 600, color: "#5f6368", textTransform: "uppercase", letterSpacing: "1px", marginBottom: 12 }}>Defaults for new entries</div>
             <div className="wht-grid-3col" style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12 }}>
               <div>
-                <div style={{ fontSize: 13, color: "#5f6368", marginBottom: 5 }}>Default Customer</div>
+                <div style={{ fontSize: 13, color: "#5f6368", marginBottom: 5 }}>Default {customerLabel}</div>
                 <FavSel value={defaults.customer} onChange={v => setDefaults(prev => ({ ...prev, customer: v }))} options={getItemNames(activeConfig.customers)} configItems={activeConfig.customers} placeholder="— None —" />
               </div>
               <div>
                 <div style={{ fontSize: 13, color: "#5f6368", marginBottom: 5 }}>Default Project</div>
                 <FavSel value={defaults.project} onChange={v => setDefaults(prev => ({ ...prev, project: v }))} options={getProjectsForCustomer(defaults.customer)} configItems={activeConfig.projects} placeholder="— None —" />
               </div>
+              {!isPersonal && (
               <div>
                 <div style={{ fontSize: 13, color: "#5f6368", marginBottom: 5 }}>Default Work Order</div>
                 <FavSel value={defaults.workOrder} onChange={v => setDefaults(prev => ({ ...prev, workOrder: v }))} options={getWorkOrdersForProject(defaults.project)} configItems={activeConfig.workOrders} placeholder="— None —" />
               </div>
+              )}
               <div>
                 <div style={{ fontSize: 13, color: "#5f6368", marginBottom: 5 }}>Default Activity</div>
                 <FavSel value={defaults.activity} onChange={v => setDefaults(prev => ({ ...prev, activity: v }))} options={getActivitiesForProject(defaults.project)} favouriteNames={config.favouriteActivities || []} placeholder="— None —" />
