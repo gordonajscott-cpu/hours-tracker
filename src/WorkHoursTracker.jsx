@@ -971,19 +971,18 @@ function AdminList({ title, items: rawItems, onUpdate, color, favourites, onTogg
               </div>
             ) : (
               <>
-                {/* Reorder buttons */}
-                <div style={{ display: "flex", flexDirection: "column", gap: 1, flexShrink: 0 }}>
+                <div style={{ display: "flex", gap: 2, flexShrink: 0, alignItems: "center" }}>
                   <button onClick={() => moveItem(i, i - 1)} disabled={i === 0} style={{
                     background: "transparent", border: "none", color: i === 0 ? "#e8eaed" : "#80868b", cursor: i === 0 ? "default" : "pointer",
-                    fontSize: 10, padding: 0, lineHeight: 1
-                  }}>▲</button>
+                    fontSize: 9, padding: 0, lineHeight: 1
+                  }}>◀</button>
                   <button onClick={() => moveItem(i, i + 1)} disabled={i === items.length - 1} style={{
                     background: "transparent", border: "none", color: i === items.length - 1 ? "#e8eaed" : "#80868b", cursor: i === items.length - 1 ? "default" : "pointer",
-                    fontSize: 10, padding: 0, lineHeight: 1
-                  }}>▼</button>
+                    fontSize: 9, padding: 0, lineHeight: 1
+                  }}>▶</button>
                 </div>
-                {onToggleFav && <span onClick={() => onToggleFav(item)} style={{ cursor: "pointer", fontSize: 16, color: isFavItem ? "#fbbc04" : "#dadce0", flexShrink: 0 }} title={isFavItem ? "Remove from favourites" : "Add to favourites"}>{isFavItem ? "★" : "☆"}</span>}
-                <span onClick={() => startEdit(i)} style={{ fontSize: 13, color: "#202124", cursor: "pointer", flex: 1 }} title="Click to edit">{item}</span>
+                {onToggleFav && <span onClick={() => onToggleFav(item)} style={{ cursor: "pointer", fontSize: 14, color: isFavItem ? "#fbbc04" : "#dadce0", flexShrink: 0, lineHeight: 1 }} title={isFavItem ? "Remove from favourites" : "Add to favourites"}>{isFavItem ? "★" : "☆"}</span>}
+                <span onClick={() => startEdit(i)} style={{ fontSize: 12, color: "#202124", cursor: "pointer", flex: 1 }} title="Click to edit">{item}</span>
                 {onSetCategory && (
                   <div style={{ display: "flex", gap: 3, flexShrink: 0 }}>
                     {["good", "bad"].map(c => (
@@ -1116,14 +1115,14 @@ function AdminCodeList({ title, items: rawItems, onUpdate, color }) {
                 </div>
               ) : (
                 <>
-                  <div style={{ display: "flex", flexDirection: "column", gap: 1, flexShrink: 0 }}>
-                    <button onClick={() => moveItem(i, i - 1)} disabled={i === 0} style={{ background: "transparent", border: "none", color: i === 0 ? "#e8eaed" : "#80868b", cursor: i === 0 ? "default" : "pointer", fontSize: 10, padding: 0, lineHeight: 1 }}>▲</button>
-                    <button onClick={() => moveItem(i, i + 1)} disabled={i === items.length - 1} style={{ background: "transparent", border: "none", color: i === items.length - 1 ? "#e8eaed" : "#80868b", cursor: i === items.length - 1 ? "default" : "pointer", fontSize: 10, padding: 0, lineHeight: 1 }}>▼</button>
+                  <div style={{ display: "flex", gap: 2, flexShrink: 0, alignItems: "center" }}>
+                    <button onClick={() => moveItem(i, i - 1)} disabled={i === 0} style={{ background: "transparent", border: "none", color: i === 0 ? "#e8eaed" : "#80868b", cursor: i === 0 ? "default" : "pointer", fontSize: 9, padding: 0, lineHeight: 1 }}>◀</button>
+                    <button onClick={() => moveItem(i, i + 1)} disabled={i === items.length - 1} style={{ background: "transparent", border: "none", color: i === items.length - 1 ? "#e8eaed" : "#80868b", cursor: i === items.length - 1 ? "default" : "pointer", fontSize: 9, padding: 0, lineHeight: 1 }}>▶</button>
                   </div>
-                  <span onClick={() => toggleFav(i)} style={{ cursor: "pointer", fontSize: 16, color: fav ? "#fbbc04" : "#dadce0", flexShrink: 0 }} title={fav ? "Remove from favourites" : "Add to favourites"}>{fav ? "★" : "☆"}</span>
+                  <span onClick={() => toggleFav(i)} style={{ cursor: "pointer", fontSize: 14, color: fav ? "#fbbc04" : "#dadce0", flexShrink: 0, lineHeight: 1 }} title={fav ? "Remove from favourites" : "Add to favourites"}>{fav ? "★" : "☆"}</span>
                   <div onClick={() => startEdit(i)} style={{ cursor: "pointer", flex: 1 }} title="Click to edit">
-                    <span style={{ fontSize: 13, color: "#202124" }}>{itemName}</span>
-                    {itemCode && <span style={{ fontSize: 13, color: "#80868b", marginLeft: 8 }}>({itemCode})</span>}
+                    <span style={{ fontSize: 12, color: "#202124" }}>{itemName}</span>
+                    {itemCode && <span style={{ fontSize: 12, color: "#80868b", marginLeft: 6 }}>({itemCode})</span>}
                   </div>
                   {confirmIdx === i ? (
                     <div style={{ display: "flex", gap: 6, alignItems: "center", flexShrink: 0 }}>
@@ -1402,14 +1401,14 @@ function ProjectEditor({ items: rawItems, templates, customers, onUpdate, color 
               onDragOver={e => e.preventDefault()}
               onDrop={e => { e.preventDefault(); if (dragIdx !== null && dragIdx !== i) moveItem(dragIdx, i); setDragIdx(null); }}
               onDragEnd={() => setDragIdx(null)}
-              style={{ display: "flex", alignItems: "center", gap: 6, padding: "5px 10px", background: dragIdx === i ? "#e8f0fe" : fav ? "#fffbeb" : "#ffffff", borderRadius: 5, flexWrap: "wrap", opacity: dragIdx === i ? 0.5 : 1, cursor: editIdx === i ? "default" : "grab" }}>
-              <div style={{ display: "flex", flexDirection: "column", gap: 1, flexShrink: 0 }}>
-                <button onClick={() => moveItem(i, i - 1)} disabled={i === 0} style={{ background: "transparent", border: "none", color: i === 0 ? "#e8eaed" : "#80868b", cursor: i === 0 ? "default" : "pointer", fontSize: 10, padding: 0, lineHeight: 1 }}>▲</button>
-                <button onClick={() => moveItem(i, i + 1)} disabled={i === items.length - 1} style={{ background: "transparent", border: "none", color: i === items.length - 1 ? "#e8eaed" : "#80868b", cursor: i === items.length - 1 ? "default" : "pointer", fontSize: 10, padding: 0, lineHeight: 1 }}>▼</button>
+              style={{ display: "flex", alignItems: "center", gap: 4, padding: "3px 8px", background: dragIdx === i ? "#e8f0fe" : fav ? "#fffbeb" : "#ffffff", borderRadius: 4, flexWrap: "wrap", opacity: dragIdx === i ? 0.5 : 1, cursor: editIdx === i ? "default" : "grab" }}>
+              <div style={{ display: "flex", gap: 2, flexShrink: 0, alignItems: "center" }}>
+                <button onClick={() => moveItem(i, i - 1)} disabled={i === 0} style={{ background: "transparent", border: "none", color: i === 0 ? "#e8eaed" : "#80868b", cursor: i === 0 ? "default" : "pointer", fontSize: 9, padding: 0, lineHeight: 1 }}>◀</button>
+                <button onClick={() => moveItem(i, i + 1)} disabled={i === items.length - 1} style={{ background: "transparent", border: "none", color: i === items.length - 1 ? "#e8eaed" : "#80868b", cursor: i === items.length - 1 ? "default" : "pointer", fontSize: 9, padding: 0, lineHeight: 1 }}>▶</button>
               </div>
-              <span onClick={() => toggleFav(i)} style={{ cursor: "pointer", fontSize: 16, color: fav ? "#fbbc04" : "#dadce0", flexShrink: 0 }} title={fav ? "Remove from favourites" : "Add to favourites"}>{fav ? "★" : "☆"}</span>
+              <span onClick={() => toggleFav(i)} style={{ cursor: "pointer", fontSize: 14, color: fav ? "#fbbc04" : "#dadce0", flexShrink: 0, lineHeight: 1 }} title={fav ? "Remove from favourites" : "Add to favourites"}>{fav ? "★" : "☆"}</span>
               {editIdx === i ? (
-                <div style={{ display: "flex", gap: 6, flex: "1 1 auto", minWidth: 100 }}>
+                <div style={{ display: "flex", gap: 4, flex: "1 1 auto", minWidth: 100 }}>
                   <input value={editName} onChange={e => setEditName(e.target.value)}
                     onKeyDown={e => e.key === "Enter" && saveEdit(i)} placeholder="Name..."
                     autoFocus
@@ -1552,9 +1551,9 @@ function WorkOrderEditor({ items: rawItems, projects, onUpdate, color }) {
               onDragOver={e => e.preventDefault()}
               onDrop={e => { e.preventDefault(); if (dragIdx !== null && dragIdx !== i) moveItem(dragIdx, i); setDragIdx(null); }}
               onDragEnd={() => setDragIdx(null)}
-              style={{ display: "flex", alignItems: "center", gap: 6, padding: "5px 10px", background: dragIdx === i ? "#e8f0fe" : fav ? "#fffbeb" : "#ffffff", borderRadius: 5, flexWrap: "wrap", opacity: dragIdx === i ? 0.5 : 1, cursor: editIdx === i ? "default" : "grab" }}>
+              style={{ display: "flex", alignItems: "center", gap: 4, padding: "3px 8px", background: dragIdx === i ? "#e8f0fe" : fav ? "#fffbeb" : "#ffffff", borderRadius: 4, flexWrap: "wrap", opacity: dragIdx === i ? 0.5 : 1, cursor: editIdx === i ? "default" : "grab" }}>
               {editIdx === i ? (
-                <div style={{ flex: 1, display: "flex", gap: 6 }}>
+                <div style={{ flex: 1, display: "flex", gap: 4 }}>
                   <input value={editName} onChange={e => setEditName(e.target.value)}
                     onKeyDown={e => e.key === "Enter" && saveEdit(i)} autoFocus placeholder="Name..."
                     style={{ flex: 2, background: "#ffffff", border: "1px solid #1a73e8", color: "#202124", padding: "6px 10px", borderRadius: 4, fontFamily: "'Inter', 'Roboto', sans-serif", fontSize: 14, outline: "none" }} />
@@ -1566,14 +1565,14 @@ function WorkOrderEditor({ items: rawItems, projects, onUpdate, color }) {
                 </div>
               ) : (
                 <>
-                  <div style={{ display: "flex", flexDirection: "column", gap: 1, flexShrink: 0 }}>
-                    <button onClick={() => moveItem(i, i - 1)} disabled={i === 0} style={{ background: "transparent", border: "none", color: i === 0 ? "#e8eaed" : "#80868b", cursor: i === 0 ? "default" : "pointer", fontSize: 10, padding: 0, lineHeight: 1 }}>▲</button>
-                    <button onClick={() => moveItem(i, i + 1)} disabled={i === items.length - 1} style={{ background: "transparent", border: "none", color: i === items.length - 1 ? "#e8eaed" : "#80868b", cursor: i === items.length - 1 ? "default" : "pointer", fontSize: 10, padding: 0, lineHeight: 1 }}>▼</button>
+                  <div style={{ display: "flex", gap: 2, flexShrink: 0, alignItems: "center" }}>
+                    <button onClick={() => moveItem(i, i - 1)} disabled={i === 0} style={{ background: "transparent", border: "none", color: i === 0 ? "#e8eaed" : "#80868b", cursor: i === 0 ? "default" : "pointer", fontSize: 9, padding: 0, lineHeight: 1 }}>◀</button>
+                    <button onClick={() => moveItem(i, i + 1)} disabled={i === items.length - 1} style={{ background: "transparent", border: "none", color: i === items.length - 1 ? "#e8eaed" : "#80868b", cursor: i === items.length - 1 ? "default" : "pointer", fontSize: 9, padding: 0, lineHeight: 1 }}>▶</button>
                   </div>
-                  <span onClick={() => toggleFav(i)} style={{ cursor: "pointer", fontSize: 16, color: fav ? "#fbbc04" : "#dadce0", flexShrink: 0 }} title={fav ? "Remove from favourites" : "Add to favourites"}>{fav ? "★" : "☆"}</span>
+                  <span onClick={() => toggleFav(i)} style={{ cursor: "pointer", fontSize: 14, color: fav ? "#fbbc04" : "#dadce0", flexShrink: 0, lineHeight: 1 }} title={fav ? "Remove from favourites" : "Add to favourites"}>{fav ? "★" : "☆"}</span>
                   <div onClick={() => startEdit(i)} style={{ flex: "1 1 auto", minWidth: 100, cursor: "pointer" }} title="Click to edit">
-                    <span style={{ fontSize: 13, color: "#202124" }}>{itemName}</span>
-                    {itemCode && <span style={{ fontSize: 13, color: "#80868b", marginLeft: 8 }}>({itemCode})</span>}
+                    <span style={{ fontSize: 12, color: "#202124" }}>{itemName}</span>
+                    {itemCode && <span style={{ fontSize: 12, color: "#80868b", marginLeft: 6 }}>({itemCode})</span>}
                   </div>
                   <select value={itemProj} onChange={e => updateField(i, "project", e.target.value)}
                     style={{ background: "#f8f9fa", border: "1px solid #dadce0", color: itemProj ? "#202124" : "#80868b", padding: "5px 10px", borderRadius: 6, fontFamily: "'Inter', 'Roboto', sans-serif", fontSize: 13, outline: "none", cursor: "pointer", minWidth: 120 }}>
