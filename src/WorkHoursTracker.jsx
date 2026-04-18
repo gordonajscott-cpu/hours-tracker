@@ -2360,11 +2360,13 @@ export default function WorkHoursTracker({ onImport }) {
     setClearDataBusy(true);
     try {
       await clearProfileData(userId, id);
-      setAllData({});
-      setTasks([]);
-      setConfig({});
-      setStandardHours(STANDARD_WEEKLY_HOURS);
-      setDefaults({});
+      if (id === activeProfileId) {
+        setAllData({});
+        setTasks([]);
+        setConfig({});
+        setStandardHours(STANDARD_WEEKLY_HOURS);
+        setDefaults({});
+      }
       setClearDataProfileId(null);
       setClearDataConfirmText("");
     } catch (err) {
