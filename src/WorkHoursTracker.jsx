@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect, useCallback, useRef } from "react";
 import { useAuth } from "./lib/AuthContext";
-import { getStorage, loadAllData, saveAllData, loadTasks, saveTasks, createBackup, listBackups, getBackup, deleteBackup, pruneBackups, BackupsTableMissingError, ensureDefaultProfile, createProfile, renameProfile, deleteProfile, ProfilesTableMissingError, createOrg, joinOrg, getMyOrg, getOrgMembers, updateMemberRole, removeMember, regenerateInviteCode, updateMyDisplayName, loadOrgConfig, saveOrgConfig, linkProfileToOrg, unlinkProfileFromOrg, leaveOrg, createPortfolio, listOrgPortfolios, deletePortfolio, renamePortfolio, addPortfolioMember, removePortfolioMember, getPortfolioMembers, updatePortfolioMemberRole, getMyPortfolios, loadPortfolioEntries, loadPortfolioTasks } from "./lib/storage";
+import { getStorage, loadAllData, saveAllData, loadTasks, saveTasks, createBackup, listBackups, getBackup, deleteBackup, pruneBackups, BackupsTableMissingError, ensureDefaultProfile, createProfile, renameProfile, deleteProfile, updateProfileCategory, ProfilesTableMissingError, createOrg, joinOrg, getMyOrg, getOrgMembers, updateMemberRole, removeMember, regenerateInviteCode, updateMyDisplayName, loadOrgConfig, saveOrgConfig, linkProfileToOrg, unlinkProfileFromOrg, leaveOrg, createPortfolio, listOrgPortfolios, deletePortfolio, renamePortfolio, addPortfolioMember, removePortfolioMember, getPortfolioMembers, updatePortfolioMemberRole, getMyPortfolios, loadPortfolioEntries, loadPortfolioTasks } from "./lib/storage";
 import { supabase, supabaseConfigured } from "./lib/supabase";
 
 const DAYS = ["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"];
@@ -15,6 +15,11 @@ const TIMER_KEY = "wht-v3-timer";
 const TASKS_KEY = "wht-v3-tasks";
 
 const BLOCK_COLORS = ["#1a73e8","#34a853","#ea4335","#fbbc04","#4285f4","#137333","#c5221f","#f29900","#a142f4","#24c1e0"];
+const PROFILE_CATEGORIES = [
+  { value: "work", label: "Work", color: "#1a73e8" },
+  { value: "student", label: "Student", color: "#34a853" },
+  { value: "personal", label: "Personal", color: "#f29900" },
+];
 
 // Auto-detect URLs and make clickable
 function LinkText({ text, style }) {
@@ -1727,6 +1732,9 @@ export default function WorkHoursTracker({ onImport }) {
   const [profilesAvailable, setProfilesAvailable] = useState(false);
   const [profilesVersion, setProfilesVersion] = useState(0);
   const [profileSwitching, setProfileSwitching] = useState(false);
+  const [showNewProfileForm, setShowNewProfileForm] = useState(false);
+  const [newProfileName, setNewProfileName] = useState("");
+  const [newProfileCategory, setNewProfileCategory] = useState("work");
   // Only pass a profile id to the storage layer once profiles have been
   // detected as available (migration 004 applied). Before that, the storage
   // adapter behaves exactly as it did pre-profiles so nothing breaks.
@@ -2294,15 +2302,14 @@ export default function WorkHoursTracker({ onImport }) {
     setActiveProfileId(nextId);
   }, [profilesAvailable, activeProfileId, save, allData, config, standardHours, defaults]);
 
-  async function addProfile(name) {
+  async function addProfile(name, category = 'work') {
     if (!profilesAvailable) return;
     const trimmed = (name || "").trim();
     if (!trimmed) return;
     const id = Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
     try {
-      await createProfile(userId, id, trimmed);
+      await createProfile(userId, id, trimmed, category);
       setProfilesVersion(v => v + 1);
-      // Switch to the new profile immediately after creation
       setTimeout(() => switchProfile(id), 0);
     } catch (err) {
       if (err instanceof ProfilesTableMissingError) {
@@ -4722,9 +4729,10 @@ export default function WorkHoursTracker({ onImport }) {
                 flexShrink: 0,
               }}
             >
-              {profiles.map(p => (
-                <option key={p.id} value={p.id}>{p.name}</option>
-              ))}
+              {profiles.map(p => {
+                const cat = PROFILE_CATEGORIES.find(c => c.value === (p.category || "work"));
+                return <option key={p.id} value={p.id}>{p.name}{cat ? ` (${cat.label})` : ""}</option>;
+              })}
             </select>
           )}
           <button onClick={() => setActiveTab("admin")} title="Admin / Settings" style={{
@@ -8864,9 +8872,10 @@ export default function WorkHoursTracker({ onImport }) {
                             <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
                               {profiles.map(p => {
                                 const linked = p.organization_id === orgId;
+                                const cat = PROFILE_CATEGORIES.find(c => c.value === (p.category || "work"));
                                 return (
                                   <div key={p.id} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, padding: "4px 8px", background: linked ? "#f3e8ff" : "#fafafa", borderRadius: 4 }}>
-                                    <span style={{ flex: 1 }}>{p.name}</span>
+                                    <span style={{ flex: 1 }}>{p.name}{cat && <span style={{ marginLeft: 6, fontSize: 10, fontWeight: 600, color: cat.color, background: cat.color + "18", padding: "1px 5px", borderRadius: 6 }}>{cat.label}</span>}</span>
                                     {linked
                                       ? <button onClick={() => handleUnlinkProfile(p.id)} style={{ fontSize: 11, padding: "2px 8px", background: "#fff", border: "1px solid #dadce0", borderRadius: 4, cursor: "pointer" }}>Unlink</button>
                                       : <button onClick={() => handleLinkProfile(p.id)} style={{ fontSize: 11, padding: "2px 8px", background: "#7c3aed", color: "#fff", border: "none", borderRadius: 4, cursor: "pointer" }}>Link to Org</button>
@@ -8885,9 +8894,10 @@ export default function WorkHoursTracker({ onImport }) {
                         <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
                           {profiles.map(p => {
                             const linked = p.organization_id === orgId;
+                            const cat = PROFILE_CATEGORIES.find(c => c.value === (p.category || "work"));
                             return (
                               <div key={p.id} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, padding: "4px 8px", background: linked ? "#f3e8ff" : "#fafafa", borderRadius: 4 }}>
-                                <span style={{ flex: 1 }}>{p.name}</span>
+                                <span style={{ flex: 1 }}>{p.name}{cat && <span style={{ marginLeft: 6, fontSize: 10, fontWeight: 600, color: cat.color, background: cat.color + "18", padding: "1px 5px", borderRadius: 6 }}>{cat.label}</span>}</span>
                                 {linked
                                   ? <span style={{ fontSize: 11, color: "#7c3aed", fontWeight: 600 }}>Linked</span>
                                   : <button onClick={() => handleLinkProfile(p.id)} style={{ fontSize: 11, padding: "2px 8px", background: "#7c3aed", color: "#fff", border: "none", borderRadius: 4, cursor: "pointer" }}>Link</button>
@@ -9413,17 +9423,76 @@ export default function WorkHoursTracker({ onImport }) {
                     Keep separate sets of customers, projects, tasks, and time entries (e.g. Work vs Personal).
                   </div>
                 </div>
-                {profilesAvailable && (
-                  <button onClick={() => {
-                    const name = window.prompt("New profile name:", "");
-                    if (name) addProfile(name);
-                  }} style={{
+                {profilesAvailable && !showNewProfileForm && (
+                  <button onClick={() => setShowNewProfileForm(true)} style={{
                     background: "#1a73e8", border: "none", color: "#ffffff", padding: "8px 18px",
                     borderRadius: 20, cursor: "pointer",
                     fontFamily: "'Inter', 'Roboto', sans-serif", fontSize: 13, fontWeight: 600
                   }}>+ New Profile</button>
                 )}
               </div>
+
+              {showNewProfileForm && (
+                <div style={{
+                  marginTop: 14, padding: "14px 16px", background: "#f0f6ff",
+                  border: "1px solid #c2d9fc", borderRadius: 8
+                }}>
+                  <div style={{ fontSize: 13, fontWeight: 600, color: "#1a73e8", marginBottom: 10 }}>New Profile</div>
+                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+                    <input
+                      autoFocus
+                      placeholder="Profile name"
+                      value={newProfileName}
+                      onChange={e => setNewProfileName(e.target.value)}
+                      onKeyDown={e => {
+                        if (e.key === "Enter" && newProfileName.trim()) {
+                          addProfile(newProfileName.trim(), newProfileCategory);
+                          setNewProfileName(""); setNewProfileCategory("work"); setShowNewProfileForm(false);
+                        } else if (e.key === "Escape") {
+                          setNewProfileName(""); setNewProfileCategory("work"); setShowNewProfileForm(false);
+                        }
+                      }}
+                      style={{
+                        flex: "1 1 140px", padding: "7px 12px", border: "1px solid #dadce0", borderRadius: 6,
+                        fontSize: 13, outline: "none", fontFamily: "'Inter', 'Roboto', sans-serif"
+                      }}
+                    />
+                    <select
+                      value={newProfileCategory}
+                      onChange={e => setNewProfileCategory(e.target.value)}
+                      style={{
+                        padding: "7px 12px", border: "1px solid #dadce0", borderRadius: 6,
+                        fontSize: 13, background: "#ffffff", outline: "none",
+                        fontFamily: "'Inter', 'Roboto', sans-serif"
+                      }}
+                    >
+                      {PROFILE_CATEGORIES.map(c => (
+                        <option key={c.value} value={c.value}>{c.label}</option>
+                      ))}
+                    </select>
+                    <button
+                      disabled={!newProfileName.trim()}
+                      onClick={() => {
+                        addProfile(newProfileName.trim(), newProfileCategory);
+                        setNewProfileName(""); setNewProfileCategory("work"); setShowNewProfileForm(false);
+                      }}
+                      style={{
+                        background: newProfileName.trim() ? "#1a73e8" : "#a8c7fa", border: "none",
+                        color: "#ffffff", padding: "7px 16px", borderRadius: 16, cursor: newProfileName.trim() ? "pointer" : "default",
+                        fontFamily: "'Inter', 'Roboto', sans-serif", fontSize: 13, fontWeight: 600
+                      }}
+                    >Create</button>
+                    <button
+                      onClick={() => { setNewProfileName(""); setNewProfileCategory("work"); setShowNewProfileForm(false); }}
+                      style={{
+                        background: "#ffffff", border: "1px solid #dadce0", color: "#5f6368",
+                        padding: "7px 14px", borderRadius: 16, cursor: "pointer",
+                        fontFamily: "'Inter', 'Roboto', sans-serif", fontSize: 13
+                      }}
+                    >Cancel</button>
+                  </div>
+                </div>
+              )}
 
               {!profilesAvailable ? (
                 <div style={{
@@ -9453,14 +9522,38 @@ export default function WorkHoursTracker({ onImport }) {
                         borderRadius: 8
                       }}>
                         <div style={{ display: "flex", flexDirection: "column", gap: 2, minWidth: 0, flex: "1 1 240px" }}>
-                          <div style={{ fontSize: 14, fontWeight: 600, color: "#202124" }}>
-                            {p.name}{isActive && <span style={{ marginLeft: 8, fontSize: 11, fontWeight: 600, color: "#1a73e8", background: "#ffffff", padding: "2px 8px", borderRadius: 8, border: "1px solid #1a73e8" }}>Active</span>}
+                          <div style={{ fontSize: 14, fontWeight: 600, color: "#202124", display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+                            {p.name}
+                            {(() => { const cat = PROFILE_CATEGORIES.find(c => c.value === (p.category || "work")); return cat ? (
+                              <span style={{ fontSize: 10, fontWeight: 600, color: cat.color, background: cat.color + "18", padding: "1px 7px", borderRadius: 8, border: `1px solid ${cat.color}40` }}>{cat.label}</span>
+                            ) : null; })()}
+                            {isActive && <span style={{ fontSize: 11, fontWeight: 600, color: "#1a73e8", background: "#ffffff", padding: "2px 8px", borderRadius: 8, border: "1px solid #1a73e8" }}>Active</span>}
                           </div>
                           <div style={{ fontSize: 11, color: "#80868b" }}>
                             {p.id === "default" ? "Default profile" : `ID: ${p.id}`}
                           </div>
                         </div>
-                        <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                        <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center" }}>
+                          <select
+                            value={p.category || "work"}
+                            onChange={async (e) => {
+                              try {
+                                await updateProfileCategory(userId, p.id, e.target.value);
+                                setProfilesVersion(v => v + 1);
+                              } catch (err) {
+                                console.error("updateProfileCategory failed:", err);
+                              }
+                            }}
+                            style={{
+                              padding: "4px 8px", border: "1px solid #dadce0", borderRadius: 8,
+                              fontSize: 11, background: "#ffffff", outline: "none", cursor: "pointer",
+                              fontFamily: "'Inter', 'Roboto', sans-serif"
+                            }}
+                          >
+                            {PROFILE_CATEGORIES.map(c => (
+                              <option key={c.value} value={c.value}>{c.label}</option>
+                            ))}
+                          </select>
                           {!isActive && (
                             <button onClick={() => switchProfile(p.id)} style={{
                               background: "#1a73e8", border: "1px solid #1a73e8", color: "#ffffff",

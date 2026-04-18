@@ -559,18 +559,28 @@ export async function ensureDefaultProfile(userId) {
   return [{ id: 'default', user_id: userId, name: 'Default' }];
 }
 
-export async function createProfile(userId, id, name) {
+export async function createProfile(userId, id, name, category = 'work') {
   if (!supabaseConfigured || !userId) throw new Error('Not signed in');
   const { error } = await supabase
     .from('profiles')
-    .insert({ id, user_id: userId, name });
+    .insert({ id, user_id: userId, name, category });
   if (isMissingTableError(error)) {
     throw new ProfilesTableMissingError(
       'Profiles table does not exist. Run migration 004_add_profiles.sql in Supabase.',
     );
   }
   if (error) throw new Error(`createProfile failed: ${error.message}`);
-  return { id, user_id: userId, name };
+  return { id, user_id: userId, name, category };
+}
+
+export async function updateProfileCategory(userId, id, category) {
+  if (!supabaseConfigured || !userId) throw new Error('Not signed in');
+  const { error } = await supabase
+    .from('profiles')
+    .update({ category })
+    .eq('user_id', userId)
+    .eq('id', id);
+  if (error) throw new Error(`updateProfileCategory failed: ${error.message}`);
 }
 
 export async function renameProfile(userId, id, name) {
