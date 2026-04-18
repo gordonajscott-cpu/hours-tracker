@@ -593,6 +593,14 @@ export async function renameProfile(userId, id, name) {
   if (error) throw new Error(`renameProfile failed: ${error.message}`);
 }
 
+export async function clearProfileData(userId, id) {
+  if (!supabaseConfigured || !userId) throw new Error('Not signed in');
+  for (const table of ['time_entries', 'tasks', 'config', 'settings', 'timer_state']) {
+    const { error } = await supabase.from(table).delete().eq('user_id', userId).eq('profile_id', id);
+    if (error) throw new Error(`clearProfileData failed on ${table}: ${error.message}`);
+  }
+}
+
 // Deletes the profile and all data rows tagged with its id. Cascaded manually
 // across the data tables since there is no FK from those tables to profiles.
 export async function deleteProfile(userId, id) {

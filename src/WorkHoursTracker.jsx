@@ -1,6 +1,6 @@
 import React, { useState, useMemo, useEffect, useCallback, useRef } from "react";
 import { useAuth } from "./lib/AuthContext";
-import { getStorage, loadAllData, saveAllData, loadTasks, saveTasks, createBackup, listBackups, getBackup, deleteBackup, pruneBackups, BackupsTableMissingError, ensureDefaultProfile, createProfile, renameProfile, deleteProfile, updateProfileCategory, ProfilesTableMissingError, createOrg, joinOrg, getMyOrg, getOrgMembers, updateMemberRole, removeMember, regenerateInviteCode, updateMyDisplayName, loadOrgConfig, saveOrgConfig, linkProfileToOrg, unlinkProfileFromOrg, leaveOrg, createPortfolio, listOrgPortfolios, deletePortfolio, renamePortfolio, addPortfolioMember, removePortfolioMember, getPortfolioMembers, updatePortfolioMemberRole, getMyPortfolios, loadPortfolioEntries, loadPortfolioTasks } from "./lib/storage";
+import { getStorage, loadAllData, saveAllData, loadTasks, saveTasks, createBackup, listBackups, getBackup, deleteBackup, pruneBackups, BackupsTableMissingError, ensureDefaultProfile, createProfile, renameProfile, deleteProfile, clearProfileData, updateProfileCategory, ProfilesTableMissingError, createOrg, joinOrg, getMyOrg, getOrgMembers, updateMemberRole, removeMember, regenerateInviteCode, updateMyDisplayName, loadOrgConfig, saveOrgConfig, linkProfileToOrg, unlinkProfileFromOrg, leaveOrg, createPortfolio, listOrgPortfolios, deletePortfolio, renamePortfolio, addPortfolioMember, removePortfolioMember, getPortfolioMembers, updatePortfolioMemberRole, getMyPortfolios, loadPortfolioEntries, loadPortfolioTasks } from "./lib/storage";
 import { supabase, supabaseConfigured } from "./lib/supabase";
 
 const DAYS = ["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"];
@@ -1734,6 +1734,9 @@ export default function WorkHoursTracker({ onImport }) {
   const [showNewProfileForm, setShowNewProfileForm] = useState(false);
   const [newProfileName, setNewProfileName] = useState("");
   const [newProfileCategory, setNewProfileCategory] = useState("work");
+  const [clearDataProfileId, setClearDataProfileId] = useState(null);
+  const [clearDataConfirmText, setClearDataConfirmText] = useState("");
+  const [clearDataBusy, setClearDataBusy] = useState(false);
   // Only pass a profile id to the storage layer once profiles have been
   // detected as available (migration 004 applied). Before that, the storage
   // adapter behaves exactly as it did pre-profiles so nothing breaks.
@@ -2350,6 +2353,25 @@ export default function WorkHoursTracker({ onImport }) {
     } catch (err) {
       console.error("deleteProfile failed:", err);
       alert("Could not delete profile: " + (err?.message || "Unknown error"));
+    }
+  }
+
+  async function handleClearProfileData(id) {
+    setClearDataBusy(true);
+    try {
+      await clearProfileData(userId, id);
+      setAllData({});
+      setTasks([]);
+      setConfig({});
+      setStandardHours(STANDARD_WEEKLY_HOURS);
+      setDefaults({});
+      setClearDataProfileId(null);
+      setClearDataConfirmText("");
+    } catch (err) {
+      console.error("clearProfileData failed:", err);
+      alert("Could not clear data: " + (err?.message || "Unknown error"));
+    } finally {
+      setClearDataBusy(false);
     }
   }
 
@@ -9568,6 +9590,11 @@ export default function WorkHoursTracker({ onImport }) {
                             padding: "6px 12px", borderRadius: 16, cursor: "pointer",
                             fontFamily: "'Inter', 'Roboto', sans-serif", fontSize: 12, fontWeight: 600
                           }}>Rename</button>
+                          <button onClick={() => { setClearDataProfileId(p.id); setClearDataConfirmText(""); }} style={{
+                            background: "#ffffff", border: "1px solid #dadce0", color: "#e37400",
+                            padding: "6px 12px", borderRadius: 16, cursor: "pointer",
+                            fontFamily: "'Inter', 'Roboto', sans-serif", fontSize: 12, fontWeight: 600
+                          }}>Clear Data</button>
                           {p.id !== "default" && (
                             <button onClick={() => removeProfile(p.id)} style={{
                               background: "#ffffff", border: "1px solid #dadce0", color: "#d93025",
@@ -9583,6 +9610,66 @@ export default function WorkHoursTracker({ onImport }) {
               )}
             </div>
           )}
+
+          {/* Clear profile data confirmation modal */}
+          {clearDataProfileId && (() => {
+            const p = profiles.find(x => x.id === clearDataProfileId);
+            const profileName = p?.name || clearDataProfileId;
+            const confirmed = clearDataConfirmText.trim().toLowerCase() === profileName.toLowerCase();
+            return (
+              <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", zIndex: 200, display: "flex", alignItems: "center", justifyContent: "center" }}
+                onClick={() => { if (!clearDataBusy) { setClearDataProfileId(null); setClearDataConfirmText(""); } }}>
+                <div onClick={e => e.stopPropagation()} style={{
+                  background: "#ffffff", borderRadius: 16, padding: "24px 28px", maxWidth: 440, width: "90%",
+                  boxShadow: "0 8px 30px rgba(0,0,0,0.2)"
+                }}>
+                  <div style={{ fontSize: 18, fontWeight: 700, color: "#d93025", marginBottom: 8 }}>Clear All Profile Data</div>
+                  <div style={{ fontSize: 13, color: "#5f6368", marginBottom: 6 }}>
+                    This will permanently delete all time entries, tasks, config, and settings for the profile <strong style={{ color: "#202124" }}>{profileName}</strong>. The profile itself will remain.
+                  </div>
+                  <div style={{ fontSize: 13, color: "#d93025", fontWeight: 600, marginBottom: 14 }}>
+                    This action cannot be undone.
+                  </div>
+                  <div style={{ fontSize: 13, color: "#202124", marginBottom: 8 }}>
+                    Type <strong>{profileName}</strong> to confirm:
+                  </div>
+                  <input
+                    autoFocus
+                    value={clearDataConfirmText}
+                    onChange={e => setClearDataConfirmText(e.target.value)}
+                    onKeyDown={e => { if (e.key === "Enter" && confirmed && !clearDataBusy) handleClearProfileData(clearDataProfileId); }}
+                    placeholder={profileName}
+                    disabled={clearDataBusy}
+                    style={{
+                      width: "100%", padding: "8px 12px", border: "1px solid #dadce0", borderRadius: 8,
+                      fontSize: 14, outline: "none", fontFamily: "'Inter', 'Roboto', sans-serif",
+                      boxSizing: "border-box", marginBottom: 16
+                    }}
+                  />
+                  <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
+                    <button
+                      onClick={() => { setClearDataProfileId(null); setClearDataConfirmText(""); }}
+                      disabled={clearDataBusy}
+                      style={{
+                        background: "#f1f3f4", border: "1px solid #dadce0", color: "#5f6368", padding: "10px 20px",
+                        borderRadius: 20, cursor: "pointer", fontFamily: "'Inter', 'Roboto', sans-serif", fontSize: 14
+                      }}
+                    >Cancel</button>
+                    <button
+                      onClick={() => handleClearProfileData(clearDataProfileId)}
+                      disabled={!confirmed || clearDataBusy}
+                      style={{
+                        background: confirmed && !clearDataBusy ? "#d93025" : "#f1a9a4", border: "none", color: "#ffffff",
+                        padding: "10px 24px", borderRadius: 20,
+                        cursor: confirmed && !clearDataBusy ? "pointer" : "default",
+                        fontFamily: "'Inter', 'Roboto', sans-serif", fontSize: 14, fontWeight: 600
+                      }}
+                    >{clearDataBusy ? "Clearing..." : "Clear All Data"}</button>
+                  </div>
+                </div>
+              </div>
+            );
+          })()}
         </div>
         ); })()}
 
