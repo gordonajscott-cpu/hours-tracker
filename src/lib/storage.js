@@ -440,7 +440,7 @@ function backupId() {
   return Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
 }
 
-export async function createBackup(userId, label, snapshot) {
+export async function createBackup(userId, label, snapshot, profileId) {
   if (!supabaseConfigured || !userId) {
     throw new Error('Supabase not configured or user not signed in');
   }
@@ -451,6 +451,7 @@ export async function createBackup(userId, label, snapshot) {
     label: label || 'auto',
     data: snapshot,
     size_bytes: json.length,
+    ...(profileId ? { profile_id: profileId } : {}),
   };
   const { error } = await supabase.from('backups').insert(row);
   if (isMissingTableError(error)) {
@@ -462,13 +463,14 @@ export async function createBackup(userId, label, snapshot) {
   return { id: row.id, created_at: new Date().toISOString(), label: row.label, size_bytes: row.size_bytes };
 }
 
-export async function listBackups(userId) {
+export async function listBackups(userId, profileId) {
   if (!supabaseConfigured || !userId) return [];
-  const { data, error } = await supabase
+  let query = supabase
     .from('backups')
     .select('id, created_at, label, size_bytes')
-    .eq('user_id', userId)
-    .order('created_at', { ascending: false });
+    .eq('user_id', userId);
+  if (profileId) query = query.eq('profile_id', profileId);
+  const { data, error } = await query.order('created_at', { ascending: false });
   if (isMissingTableError(error)) {
     throw new BackupsTableMissingError(
       'Backups table does not exist. Run migration 003_add_backups_table.sql in Supabase.',
@@ -500,14 +502,15 @@ export async function deleteBackup(userId, id) {
   if (error) throw new Error(`deleteBackup failed: ${error.message}`);
 }
 
-// Keep the most recent `keepCount` backups, delete the rest.
-export async function pruneBackups(userId, keepCount = 14) {
+// Keep the most recent `keepCount` backups per profile, delete the rest.
+export async function pruneBackups(userId, keepCount = 14, profileId) {
   if (!supabaseConfigured || !userId) return;
-  const { data, error } = await supabase
+  let query = supabase
     .from('backups')
     .select('id')
-    .eq('user_id', userId)
-    .order('created_at', { ascending: false });
+    .eq('user_id', userId);
+  if (profileId) query = query.eq('profile_id', profileId);
+  const { data, error } = await query.order('created_at', { ascending: false });
   if (error || !data) return;
   const toDelete = data.slice(keepCount).map((r) => r.id);
   if (toDelete.length === 0) return;
