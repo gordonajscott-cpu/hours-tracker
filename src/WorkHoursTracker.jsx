@@ -1707,6 +1707,15 @@ function NoteAutoComplete({ value, onChange, onSelectEntry, onEnter, noteHistory
   );
 }
 
+// Baseline shapes used when (re)loading a profile — ensures switching profiles
+// can't leak the previous profile's config through a partial merge.
+function getDefaultConfig() {
+  return { customers: [], projects: [], workOrders: [], activities: [], tags: [], activityTemplates: [], favouriteActivities: [], roles: [], favouriteRoles: [], favouriteTags: [], billRates: [], favouriteBillRates: [], tagCategories: {}, bankHolidayRegion: "", customHolidays: {}, showDailyQuote: true, taskTemplates: [] };
+}
+function getDefaultDefaults() {
+  return { customer: "", project: "", workOrder: "", activity: "", role: "", billRate: "", startTime: "09:00", endTime: "17:30" };
+}
+
 // ═══ MAIN APP ═══
 export default function WorkHoursTracker({ onImport }) {
   const { user } = useAuth();
@@ -1715,9 +1724,9 @@ export default function WorkHoursTracker({ onImport }) {
   const [currentYear, setCurrentYear] = useState(now.getFullYear());
   const [currentWeek, setCurrentWeek] = useState(getWeekNumber(now));
   const [standardHours, setStandardHours] = useState(STANDARD_WEEKLY_HOURS.toString());
-  const [defaults, setDefaults] = useState({ customer: "", project: "", workOrder: "", activity: "", role: "", billRate: "", startTime: "09:00", endTime: "17:30" });
+  const [defaults, setDefaults] = useState(getDefaultDefaults());
   const [allData, setAllData] = useState({});
-  const [config, setConfig] = useState({ customers: [], projects: [], workOrders: [], activities: [], tags: [], activityTemplates: [], favouriteActivities: [], roles: [], favouriteRoles: [], favouriteTags: [], billRates: [], favouriteBillRates: [], tagCategories: {}, bankHolidayRegion: "", customHolidays: {}, showDailyQuote: true, taskTemplates: [] });
+  const [config, setConfig] = useState(getDefaultConfig());
   const [activeTab, setActiveTab] = useState("dashboard");
   const [quoteDismissed, setQuoteDismissed] = useState("");
   const [quoteOffset, setQuoteOffset] = useState(0);
@@ -1987,12 +1996,20 @@ export default function WorkHoursTracker({ onImport }) {
         } else if (dr?.value) {
           loadedData = JSON.parse(dr.value);
         }
-        if (cr?.value) {
-          const loaded = JSON.parse(cr.value);
-          setConfig(prev => ({ ...prev, ...loaded, tags: loaded.tags || [], activityTemplates: loaded.activityTemplates || [], favouriteActivities: loaded.favouriteActivities || [], roles: loaded.roles || [], favouriteRoles: loaded.favouriteRoles || [], favouriteTags: loaded.favouriteTags || [], billRates: loaded.billRates || [], favouriteBillRates: loaded.favouriteBillRates || [], tagCategories: loaded.tagCategories || {}, bankHolidayRegion: loaded.bankHolidayRegion || "", customHolidays: loaded.customHolidays || {} }));
-        }
+        // Always replace (not merge over prev) so switching profiles can't
+        // leak the previous profile's customers/projects/etc.
+        const loadedCfg = cr?.value ? JSON.parse(cr.value) : {};
+        setConfig({ ...getDefaultConfig(), ...loadedCfg });
         let loadedDefs = { customer: "", project: "", workOrder: "", activity: "", role: "" };
-        if (sr?.value) { const s = JSON.parse(sr.value); if (s.standardHours) setStandardHours(s.standardHours); if (s.defaults) { loadedDefs = { ...loadedDefs, ...s.defaults }; setDefaults(prev => ({ ...prev, ...s.defaults })); } }
+        if (sr?.value) {
+          const s = JSON.parse(sr.value);
+          if (s.standardHours) setStandardHours(s.standardHours); else setStandardHours(STANDARD_WEEKLY_HOURS.toString());
+          if (s.defaults) loadedDefs = { ...loadedDefs, ...s.defaults };
+          setDefaults({ ...getDefaultDefaults(), ...(s.defaults || {}) });
+        } else {
+          setStandardHours(STANDARD_WEEKLY_HOURS.toString());
+          setDefaults(getDefaultDefaults());
+        }
 
         // Seed data for Jan/Feb/Mar 2026 on truly fresh installs only. Skip for
         // newly-created profiles and for profile switches (which both have
@@ -2221,14 +2238,13 @@ export default function WorkHoursTracker({ onImport }) {
           storageAdapter.get(SETTINGS_KEY).catch(() => null)
         ]);
         if (supaData) setAllData(supaData);
-        if (cr?.value) {
-          const loaded = JSON.parse(cr.value);
-          setConfig(prev => ({ ...prev, ...loaded, tags: loaded.tags || [], activityTemplates: loaded.activityTemplates || [], favouriteActivities: loaded.favouriteActivities || [], roles: loaded.roles || [], favouriteRoles: loaded.favouriteRoles || [], favouriteTags: loaded.favouriteTags || [], billRates: loaded.billRates || [], favouriteBillRates: loaded.favouriteBillRates || [], tagCategories: loaded.tagCategories || {}, bankHolidayRegion: loaded.bankHolidayRegion || "", customHolidays: loaded.customHolidays || {} }));
-        }
+        setConfig({ ...getDefaultConfig(), ...(cr?.value ? JSON.parse(cr.value) : {}) });
         if (sr?.value) {
           const s = JSON.parse(sr.value);
           if (s.standardHours) setStandardHours(s.standardHours);
-          if (s.defaults) setDefaults(prev => ({ ...prev, ...s.defaults }));
+          setDefaults({ ...getDefaultDefaults(), ...(s.defaults || {}) });
+        } else {
+          setDefaults(getDefaultDefaults());
         }
         const supaTasks = await loadTasks(userId, effectiveProfileId);
         if (supaTasks) setTasks(supaTasks);
@@ -2238,15 +2254,14 @@ export default function WorkHoursTracker({ onImport }) {
           storageAdapter.get(CONFIG_KEY).catch(() => null),
           storageAdapter.get(SETTINGS_KEY).catch(() => null)
         ]);
-        if (dr?.value) setAllData(JSON.parse(dr.value));
-        if (cr?.value) {
-          const loaded = JSON.parse(cr.value);
-          setConfig(prev => ({ ...prev, ...loaded, tags: loaded.tags || [], activityTemplates: loaded.activityTemplates || [], favouriteActivities: loaded.favouriteActivities || [], roles: loaded.roles || [], favouriteRoles: loaded.favouriteRoles || [], favouriteTags: loaded.favouriteTags || [], billRates: loaded.billRates || [], favouriteBillRates: loaded.favouriteBillRates || [], tagCategories: loaded.tagCategories || {}, bankHolidayRegion: loaded.bankHolidayRegion || "", customHolidays: loaded.customHolidays || {} }));
-        }
+        setAllData(dr?.value ? JSON.parse(dr.value) : {});
+        setConfig({ ...getDefaultConfig(), ...(cr?.value ? JSON.parse(cr.value) : {}) });
         if (sr?.value) {
           const s = JSON.parse(sr.value);
           if (s.standardHours) setStandardHours(s.standardHours);
-          if (s.defaults) setDefaults(prev => ({ ...prev, ...s.defaults }));
+          setDefaults({ ...getDefaultDefaults(), ...(s.defaults || {}) });
+        } else {
+          setDefaults(getDefaultDefaults());
         }
         try {
           const tk = await storageAdapter.get(TASKS_KEY).catch(() => null);
