@@ -467,9 +467,9 @@ export async function listBackups(userId, profileId) {
   if (!supabaseConfigured || !userId) return [];
   let query = supabase
     .from('backups')
-    .select('id, created_at, label, size_bytes')
+    .select('id, created_at, label, size_bytes, profile_id')
     .eq('user_id', userId);
-  if (profileId) query = query.eq('profile_id', profileId);
+  if (profileId) query = query.or(`profile_id.eq.${profileId},profile_id.is.null`);
   const { data, error } = await query.order('created_at', { ascending: false });
   if (isMissingTableError(error)) {
     throw new BackupsTableMissingError(

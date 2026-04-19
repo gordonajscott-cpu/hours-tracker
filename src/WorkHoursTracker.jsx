@@ -8863,7 +8863,7 @@ export default function WorkHoursTracker({ onImport }) {
         return (
         <div>
           {/* ── ORGANIZATION ── */}
-          {supabaseConfigured && userId !== "local" && (
+          {supabaseConfigured && userId !== "local" && !isPersonal && (
             <>
               <div style={{ fontSize: 12, fontWeight: 700, color: "#7c3aed", textTransform: "uppercase", letterSpacing: "1.5px", marginBottom: 10, padding: "0 4px", display: "flex", alignItems: "center", gap: 8 }}>
                 <div style={{ flex: 1, height: 1, background: "#c4b5fd" }} />
