@@ -8010,7 +8010,7 @@ export default function WorkHoursTracker({ onImport }) {
         <div>
           {/* Report period selector */}
           <div style={{ display: "flex", gap: 3, marginBottom: 16 }}>
-            {[["daily","Daily"],["weekly","Weekly"],["monthly","Monthly"],["annual","Annual"],["batch","Batch"],["comparison","Compare"]].map(([k, l]) => (
+            {[["daily","Daily"],["weekly","Weekly"],["monthly","Monthly"],["annual","Annual"],!isPersonal && ["batch","Batch"],["comparison","Compare"]].filter(Boolean).map(([k, l]) => (
               <button key={k} onClick={() => setReportView(k)} style={{
                 fontFamily: "'Inter', 'Roboto', sans-serif", fontSize: 13, fontWeight: 600, padding: "9px 20px",
                 background: reportView === k ? "#1a73e8" : "#ffffff",
