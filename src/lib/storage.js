@@ -465,19 +465,20 @@ export async function createBackup(userId, label, snapshot, profileId) {
 
 export async function listBackups(userId, profileId) {
   if (!supabaseConfigured || !userId) return [];
-  let query = supabase
+  const { data, error } = await supabase
     .from('backups')
     .select('id, created_at, label, size_bytes, profile_id')
-    .eq('user_id', userId);
-  if (profileId) query = query.or(`profile_id.eq.${profileId},profile_id.is.null`);
-  const { data, error } = await query.order('created_at', { ascending: false });
+    .eq('user_id', userId)
+    .order('created_at', { ascending: false });
   if (isMissingTableError(error)) {
     throw new BackupsTableMissingError(
       'Backups table does not exist. Run migration 003_add_backups_table.sql in Supabase.',
     );
   }
   if (error) throw new Error(`listBackups failed: ${error.message}`);
-  return data || [];
+  const rows = data || [];
+  if (!profileId) return rows;
+  return rows.filter(r => !r.profile_id || r.profile_id === profileId);
 }
 
 export async function getBackup(userId, id) {
