@@ -1220,7 +1220,7 @@ function ActivityTemplateEditor({ templates, onUpdate, color, favouriteActivitie
         }}>+ Template</button>
       </div>
       {templates.length === 0 && <div style={{ fontSize: 13, color: "#80868b", fontStyle: "italic" }}>No activity templates yet. Create one and assign it to projects.</div>}
-      <div style={{ display: "flex", flexDirection: "column", gap: 6, maxHeight: 400, overflowY: "auto" }}>
+      <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
         {templates.map((tmpl, tIdx) => (
           <div key={tmpl.name} style={{ border: "1px solid #dadce0", borderRadius: 10, overflow: "hidden" }}>
             {/* Template header */}
