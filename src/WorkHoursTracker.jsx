@@ -3314,7 +3314,7 @@ export default function WorkHoursTracker({ onImport }) {
     if (loading || !tasksLoaded) return;
     if (!supabaseConfigured || userId === "local") return;
     let cancelled = false;
-    listBackups(userId)
+    listBackups(userId, activeProfileId)
       .then(rows => { if (!cancelled) { setBackups(rows); setBackupsTableMissing(false); } })
       .catch(err => {
         if (err instanceof BackupsTableMissingError) {
@@ -3324,22 +3324,23 @@ export default function WorkHoursTracker({ onImport }) {
         }
       });
     return () => { cancelled = true; };
-  }, [loading, tasksLoaded, userId, backupsVersion]);
+  }, [loading, tasksLoaded, userId, activeProfileId, backupsVersion]);
 
   // One-shot auto-backup per session, throttled to every 24h via localStorage
   useEffect(() => {
     if (loading || !tasksLoaded || didAutoBackup) return;
     if (!supabaseConfigured || userId === "local") return;
-    const last = parseInt(localStorage.getItem(LAST_BACKUP_KEY) || "0", 10);
+    const profileBackupKey = LAST_BACKUP_KEY + (activeProfileId ? `-${activeProfileId}` : "");
+    const last = parseInt(localStorage.getItem(profileBackupKey) || "0", 10);
     if (last && Date.now() - last < AUTO_BACKUP_INTERVAL_MS) {
       setDidAutoBackup(true);
       return;
     }
     const t = setTimeout(async () => {
       try {
-        await createBackup(userId, "auto", buildSnapshot());
-        localStorage.setItem(LAST_BACKUP_KEY, Date.now().toString());
-        await pruneBackups(userId, BACKUP_KEEP_COUNT);
+        await createBackup(userId, "auto", buildSnapshot(), activeProfileId);
+        localStorage.setItem(LAST_BACKUP_KEY + (activeProfileId ? `-${activeProfileId}` : ""), Date.now().toString());
+        await pruneBackups(userId, BACKUP_KEEP_COUNT, activeProfileId);
         setBackupsVersion(v => v + 1);
         setBackupsTableMissing(false);
       } catch (err) {
@@ -3359,9 +3360,9 @@ export default function WorkHoursTracker({ onImport }) {
     if (!supabaseConfigured || userId === "local") return;
     setBackupBusy("creating");
     try {
-      await createBackup(userId, "manual", buildSnapshot());
-      localStorage.setItem(LAST_BACKUP_KEY, Date.now().toString());
-      await pruneBackups(userId, BACKUP_KEEP_COUNT);
+      await createBackup(userId, "manual", buildSnapshot(), activeProfileId);
+      localStorage.setItem(LAST_BACKUP_KEY + (activeProfileId ? `-${activeProfileId}` : ""), Date.now().toString());
+      await pruneBackups(userId, BACKUP_KEEP_COUNT, activeProfileId);
       setBackupsVersion(v => v + 1);
       setBackupsTableMissing(false);
       setSaveStatus("backed up");
