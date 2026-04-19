@@ -1314,7 +1314,7 @@ function ActivityTemplateEditor({ templates, onUpdate, color, favouriteActivitie
 }
 
 // Project Editor with template assignment
-function ProjectEditor({ items: rawItems, templates, customers, onUpdate, color, personalMode }) {
+function ProjectEditor({ items: rawItems, templates, customers, onUpdate, color, personalMode, areaMode }) {
   const items = rawItems || [];
   const [name, setName] = useState("");
   const [code, setCode] = useState("");
@@ -1366,19 +1366,19 @@ function ProjectEditor({ items: rawItems, templates, customers, onUpdate, color,
 
   return (
     <div style={{ background: "#ffffff", border: "1px solid #dadce0", borderRadius: 10, padding: "10px 14px", boxShadow: "0 1px 3px rgba(0,0,0,0.08)" }}>
-      <div style={{ fontSize: 13, fontWeight: 600, color: color || "#202124", textTransform: "uppercase", letterSpacing: "1px", marginBottom: 6 }}>Projects</div>
+      <div style={{ fontSize: 13, fontWeight: 600, color: color || "#202124", textTransform: "uppercase", letterSpacing: "1px", marginBottom: 6 }}>{areaMode ? "Areas" : "Projects"}</div>
       <div style={{ display: "flex", gap: 6, marginBottom: 8, flexWrap: "wrap" }}>
         <input value={name} onChange={e => setName(e.target.value)} onKeyDown={e => e.key === "Enter" && add()}
           placeholder="Name..."
           style={{ flex: 2, minWidth: 120, background: "#ffffff", border: "1px solid #dadce0", color: "#202124", padding: "5px 8px", borderRadius: 6, fontFamily: "'Inter', 'Roboto', sans-serif", fontSize: 12, outline: "none" }} />
-        {!personalMode && <input value={code} onChange={e => setCode(e.target.value)} onKeyDown={e => e.key === "Enter" && add()}
+        {!personalMode && !areaMode && <input value={code} onChange={e => setCode(e.target.value)} onKeyDown={e => e.key === "Enter" && add()}
           placeholder="Code..."
           style={{ flex: 1, minWidth: 80, background: "#ffffff", border: "1px solid #dadce0", color: "#202124", padding: "5px 8px", borderRadius: 6, fontFamily: "'Inter', 'Roboto', sans-serif", fontSize: 12, outline: "none" }} />}
-        <select value={cust} onChange={e => setCust(e.target.value)}
+        {!areaMode && <select value={cust} onChange={e => setCust(e.target.value)}
           style={{ flex: 1, minWidth: 120, background: "#ffffff", border: "1px solid #dadce0", color: cust ? "#202124" : "#80868b", padding: "5px 8px", borderRadius: 6, fontFamily: "'Inter', 'Roboto', sans-serif", fontSize: 12, outline: "none", cursor: "pointer" }}>
           <option value="">{personalMode ? "Area..." : "Customer..."}</option>
           {custNames.map(n => <option key={n} value={n}>{n}</option>)}
-        </select>
+        </select>}
         <select value={tmpl} onChange={e => setTmpl(e.target.value)}
           style={{ flex: 1, minWidth: 120, background: "#ffffff", border: "1px solid #dadce0", color: tmpl ? "#202124" : "#80868b", padding: "5px 8px", borderRadius: 6, fontFamily: "'Inter', 'Roboto', sans-serif", fontSize: 12, outline: "none", cursor: "pointer" }}>
           <option value="">Template...</option>
@@ -1390,7 +1390,7 @@ function ProjectEditor({ items: rawItems, templates, customers, onUpdate, color,
         }}>+</button>
       </div>
       <div style={{ display: "flex", flexDirection: "column", gap: 1, maxHeight: 320, overflowY: "auto" }}>
-        {items.length === 0 && <div style={{ fontSize: 13, color: "#80868b", fontStyle: "italic" }}>No projects added yet</div>}
+        {items.length === 0 && <div style={{ fontSize: 13, color: "#80868b", fontStyle: "italic" }}>No {areaMode ? "areas" : "projects"} added yet</div>}
         {displayOrder.map(({ item, idx: i }, displayIdx) => {
           const itemName = getItemName(item);
           const itemCode = getItemCode(item);
@@ -1427,14 +1427,14 @@ function ProjectEditor({ items: rawItems, templates, customers, onUpdate, color,
               ) : (
                 <div onClick={() => startEdit(i)} style={{ flex: "1 1 auto", minWidth: 100, cursor: "pointer" }} title="Click to edit">
                   <span style={{ fontSize: 15, color: "#202124" }}>{itemName}</span>
-                  {!personalMode && itemCode && <span style={{ fontSize: 13, color: "#80868b", marginLeft: 8 }}>({itemCode})</span>}
+                  {!personalMode && !areaMode && itemCode && <span style={{ fontSize: 13, color: "#80868b", marginLeft: 8 }}>({itemCode})</span>}
                 </div>
               )}
-              <select value={itemCust} onChange={e => updateField(i, "customer", e.target.value)}
+              {!areaMode && <select value={itemCust} onChange={e => updateField(i, "customer", e.target.value)}
                 style={{ background: "#f8f9fa", border: "1px solid #dadce0", color: itemCust ? "#202124" : "#80868b", padding: "5px 10px", borderRadius: 6, fontFamily: "'Inter', 'Roboto', sans-serif", fontSize: 13, outline: "none", cursor: "pointer", minWidth: 120 }}>
                 <option value="">{personalMode ? "No area" : "No customer"}</option>
                 {custNames.map(n => <option key={n} value={n}>{n}</option>)}
-              </select>
+              </select>}
               <select value={itemTmpl} onChange={e => updateField(i, "activityTemplate", e.target.value)}
                 style={{ background: "#f8f9fa", border: "1px solid #dadce0", color: itemTmpl ? "#202124" : "#80868b", padding: "5px 10px", borderRadius: 6, fontFamily: "'Inter', 'Roboto', sans-serif", fontSize: 13, outline: "none", cursor: "pointer", minWidth: 120 }}>
                 <option value="">No template</option>
@@ -1713,7 +1713,7 @@ function getDefaultConfig() {
   return { customers: [], projects: [], workOrders: [], activities: [], tags: [], activityTemplates: [], favouriteActivities: [], roles: [], favouriteRoles: [], favouriteTags: [], billRates: [], favouriteBillRates: [], tagCategories: {}, bankHolidayRegion: "", customHolidays: {}, showDailyQuote: true, taskTemplates: [] };
 }
 function getDefaultDefaults() {
-  return { customer: "", project: "", workOrder: "", activity: "", role: "", billRate: "", startTime: "09:00", endTime: "17:30" };
+  return { customer: "", project: "", workOrder: "", activity: "", role: "", billRate: "", startTime: "09:00", endTime: "17:30", wakeTime: "07:00", workStartTime: "09:00", lunchStartTime: "12:00", lunchEndTime: "13:00", workEndTime: "17:30", bedTime: "22:30", workDays: [0, 1, 2, 3, 4] };
 }
 
 // ═══ MAIN APP ═══
@@ -3164,11 +3164,18 @@ export default function WorkHoursTracker({ onImport }) {
     return found ? getItemLabel(found) : name;
   }
 
-  const getActivitiesForProject = (projectName) => {
+  const getActivitiesForProject = (projectName, customerName) => {
     if (projectName) {
       const proj = (activeConfig.projects || []).find(p => getItemName(p) === projectName);
       if (proj && typeof proj === "object" && proj.activityTemplate) {
         const tmpl = (activeConfig.activityTemplates || []).find(t => t.name === proj.activityTemplate);
+        if (tmpl) return tmpl.activities;
+      }
+    }
+    if (isPersonal && customerName) {
+      const area = (activeConfig.customers || []).find(c => getItemName(c) === customerName);
+      if (area && typeof area === "object" && area.activityTemplate) {
+        const tmpl = (activeConfig.activityTemplates || []).find(t => t.name === area.activityTemplate);
         if (tmpl) return tmpl.activities;
       }
     }
@@ -4981,7 +4988,7 @@ export default function WorkHoursTracker({ onImport }) {
             )}
             <div>
               <div style={{ fontSize: 13, color: "#5f6368", textTransform: "uppercase", letterSpacing: "1px", marginBottom: 5 }}>Activity</div>
-              <FavSel value={timerActivity} onChange={setTimerActivity} options={getActivitiesForProject(timerProject)} favouriteNames={config.favouriteActivities || []} placeholder="—" />
+              <FavSel value={timerActivity} onChange={setTimerActivity} options={getActivitiesForProject(timerProject, timerCustomer)} favouriteNames={config.favouriteActivities || []} placeholder="—" />
             </div>
             <div>
               <div style={{ fontSize: 13, color: "#5f6368", textTransform: "uppercase", letterSpacing: "1px", marginBottom: 5 }}>Project</div>
@@ -5073,15 +5080,15 @@ export default function WorkHoursTracker({ onImport }) {
             <div style={{ fontSize: isMobile ? 15 : 18, fontWeight: 700, color: darkMode ? "#e0e0e0" : "#202124", marginBottom: 16, overflowWrap: "anywhere" }}>📊 Dashboard{isMobile ? "" : " — "}{isMobile ? <><br />{n.toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" })}</> : n.toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long" })}</div>
 
             {/* Top stats */}
-            <div className="wht-grid-5col" style={{ display: "grid", gridTemplateColumns: "repeat(6, 1fr)", gap: 12, marginBottom: 20 }}>
+            <div className="wht-grid-5col" style={{ display: "grid", gridTemplateColumns: isPersonal ? "repeat(5, 1fr)" : "repeat(6, 1fr)", gap: 12, marginBottom: 20 }}>
               {[
                 { label: "Tracked Today", value: fmtH(totalTracked), color: "#1a73e8" },
                 { label: "Week Total", value: fmtH(weekTotal), color: "#5f6368" },
-                { label: "Overtime", value: overtime > 0 ? "+" + fmtH(overtime) : fmtH(overtime), color: overtime > 0 ? "#d93025" : "#34a853" },
+                !isPersonal && { label: "Overtime", value: overtime > 0 ? "+" + fmtH(overtime) : fmtH(overtime), color: overtime > 0 ? "#d93025" : "#34a853" },
                 { label: "Due Today", value: dueTodayTsk.length, color: dueTodayTsk.length > 0 ? "#e37400" : "#34a853" },
                 { label: "Overdue", value: overdueTsk.length, color: overdueTsk.length > 0 ? "#d93025" : "#34a853" },
                 { label: "Done This Week", value: completedThisWeek, color: "#34a853" },
-              ].map(s => (
+              ].filter(Boolean).map(s => (
                 <div key={s.label} style={{ background: darkMode ? "#16213e" : "#fff", border: `1px solid ${darkMode ? "#2a2a4a" : "#e8eaed"}`, borderRadius: 12, padding: "16px", textAlign: "center", boxShadow: "0 1px 3px rgba(0,0,0,0.06)" }}>
                   <div style={{ fontSize: 28, fontWeight: 700, color: s.color }}>{s.value}</div>
                   <div style={{ fontSize: 12, color: "#80868b", marginTop: 4 }}>{s.label}</div>
@@ -5602,7 +5609,7 @@ export default function WorkHoursTracker({ onImport }) {
                   )}
                   <div>
                     <div style={{ fontSize: 13, color: "#5f6368", marginBottom: 5 }}>ACTIVITY</div>
-                    <FavSel value={selectedEntry.activity} onChange={v => updateEntry(selectedEntryId, "activity", v)} options={getActivitiesForProject(selectedEntry.project)} favouriteNames={config.favouriteActivities || []} placeholder="— Select —" />
+                    <FavSel value={selectedEntry.activity} onChange={v => updateEntry(selectedEntryId, "activity", v)} options={getActivitiesForProject(selectedEntry.project, selectedEntry.customer)} favouriteNames={config.favouriteActivities || []} placeholder="— Select —" />
                   </div>
                   <div>
                     <div style={{ fontSize: 13, color: "#5f6368", marginBottom: 5 }}>PROJECT</div>
@@ -5818,6 +5825,48 @@ export default function WorkHoursTracker({ onImport }) {
             const mon = getMondayOfWeek(currentWeek, currentYear);
             const sun = new Date(mon); sun.setDate(sun.getDate() + 6);
             const holCount = countHolidaysInRange(mon, sun);
+            if (isPersonal) {
+              const wd = defaults.workDays || [0,1,2,3,4];
+              const wake = parseTime(defaults.wakeTime || "07:00") || 7;
+              const workStart = parseTime(defaults.workStartTime || "09:00") || 9;
+              const lunchStart = parseTime(defaults.lunchStartTime || "12:00") || 12;
+              const lunchEnd = parseTime(defaults.lunchEndTime || "13:00") || 13;
+              const workEnd = parseTime(defaults.workEndTime || "17:30") || 17.5;
+              const bed = parseTime(defaults.bedTime || "22:30") || 22.5;
+              let weekFree = 0;
+              for (let i = 0; i < 7; i++) {
+                const isWorkDay = wd.includes(i);
+                const d = new Date(mon); d.setDate(d.getDate() + i);
+                const hol = isHoliday(d);
+                const awakeHrs = bed - wake;
+                if (isWorkDay && !hol) {
+                  const workHrs = (lunchStart - workStart) + (workEnd - lunchEnd);
+                  weekFree += awakeHrs - workHrs;
+                } else {
+                  weekFree += awakeHrs;
+                }
+              }
+              const freeRemaining = weekFree - weeklyTotal;
+              return (
+              <div className="wht-grid-3col" style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12 }}>
+                <div style={{ background: "#ffffff", border: "1px solid #dadce0", borderRadius: 12, padding: "16px 20px", textAlign: "center", boxShadow: "0 1px 3px rgba(0,0,0,0.08)" }}>
+                  <div style={{ fontSize: 13, color: "#5f6368", textTransform: "uppercase", letterSpacing: "1px", marginBottom: 6 }}>Tracked</div>
+                  <div style={{ fontSize: 28, fontWeight: 700, fontFamily: "'Inter', 'Roboto', sans-serif" }}>{fmtH(weeklyTotal)}</div>
+                </div>
+                <div style={{ background: "#ffffff", border: "1px solid #dadce0", borderRadius: 12, padding: "16px 20px", textAlign: "center", boxShadow: "0 1px 3px rgba(0,0,0,0.08)" }}>
+                  <div style={{ fontSize: 13, color: "#5f6368", textTransform: "uppercase", letterSpacing: "1px", marginBottom: 6 }}>Free Time</div>
+                  <div style={{ fontSize: 28, fontWeight: 700, fontFamily: "'Inter', 'Roboto', sans-serif", color: "#f29900" }}>{fmtH(weekFree)}</div>
+                  {holCount > 0 && <div style={{ fontSize: 11, color: "#34a853", marginTop: 4 }}>+{fmtH(holCount * (bed - wake))}h ({holCount} holiday{holCount > 1 ? "s" : ""})</div>}
+                </div>
+                <div style={{ background: freeRemaining > 0 ? "#fff8e1" : "#ffffff", border: `1px solid ${freeRemaining > 0 ? "#f29900" : "#dadce0"}`, borderRadius: 12, padding: "16px 20px", textAlign: "center", boxShadow: "0 1px 3px rgba(0,0,0,0.08)" }}>
+                  <div style={{ fontSize: 13, color: "#5f6368", textTransform: "uppercase", letterSpacing: "1px", marginBottom: 6 }}>Remaining</div>
+                  <div style={{ fontSize: 28, fontWeight: 700, fontFamily: "'Inter', 'Roboto', sans-serif", color: freeRemaining > 0 ? "#f29900" : "#5f6368" }}>
+                    {weeklyTotal > 0 ? fmtH(freeRemaining) : "—"}
+                  </div>
+                </div>
+              </div>
+              );
+            }
             const weekContracted = stdHrs - (holCount * dailyHrs);
             const weekOT = weeklyTotal - weekContracted;
             return (
@@ -7748,7 +7797,7 @@ export default function WorkHoursTracker({ onImport }) {
                     }} options={getWorkOrdersForProject(task.project)} configItems={activeConfig.workOrders} placeholder="Work Order..." />
                     )}
                     <FavSel small value={task.activity} onChange={v => updateTask(task.id, { activity: v })}
-                      options={getActivitiesForProject(task.project)} favouriteNames={config.favouriteActivities || []} placeholder="Activity..." />
+                      options={getActivitiesForProject(task.project, task.customer)} favouriteNames={config.favouriteActivities || []} placeholder="Activity..." />
                     <FavSel small value={task.project} onChange={v => updateTask(task.id, { project: v, workOrder: "" })}
                       options={getItemNames(activeConfig.projects)} configItems={activeConfig.projects} placeholder="Project..." />
                     <FavSel small value={task.customer} onChange={v => updateTask(task.id, { customer: v, project: "", workOrder: "" })}
@@ -9093,7 +9142,14 @@ export default function WorkHoursTracker({ onImport }) {
 
           {isPersonal ? (
             <>
-              <AdminList title="Areas" items={activeConfig.customers} onUpdate={cfgUpdate('customers')} color="#1a73e8" />
+              <ProjectEditor
+                items={activeConfig.customers}
+                templates={activeConfig.activityTemplates || []}
+                customers={[]}
+                onUpdate={cfgUpdate('customers')}
+                color="#1a73e8"
+                areaMode
+              />
               <div style={{ marginTop: 10 }}>
                 <ProjectEditor
                   items={activeConfig.projects}
@@ -9285,7 +9341,9 @@ export default function WorkHoursTracker({ onImport }) {
 
             {/* Info */}
             <div style={{ marginTop: 16, padding: "10px 14px", background: "#f8f9fa", borderRadius: 8, fontSize: 12, color: "#5f6368" }}>
-              Bank holidays reduce your contracted hours by {fmtH(dailyHrs)}h per holiday ({standardHours}h ÷ 5 days). Time worked on a bank holiday counts toward overtime.
+              {isPersonal
+                ? "Holidays mark days with extra free time available for personal tasks."
+                : `Bank holidays reduce your contracted hours by ${fmtH(dailyHrs)}h per holiday (${standardHours}h ÷ 5 days). Time worked on a bank holiday counts toward overtime.`}
             </div>
           </div>
 
@@ -9300,6 +9358,54 @@ export default function WorkHoursTracker({ onImport }) {
             background: "#ffffff", border: "1px solid #dadce0", borderRadius: 12,
             padding: "20px 24px", boxShadow: "0 1px 3px rgba(0,0,0,0.08)"
           }}>
+            {isPersonal ? (
+            <>
+              <div style={{ fontSize: 13, fontWeight: 600, color: "#5f6368", textTransform: "uppercase", letterSpacing: "1px", marginBottom: 12 }}>Weekly Schedule</div>
+              <div style={{ display: "flex", gap: 6, marginBottom: 14, flexWrap: "wrap" }}>
+                {["Mon","Tue","Wed","Thu","Fri","Sat","Sun"].map((d, i) => {
+                  const wd = defaults.workDays || [0,1,2,3,4];
+                  const active = wd.includes(i);
+                  return (
+                    <button key={d} onClick={() => setDefaults(prev => {
+                      const days = prev.workDays || [0,1,2,3,4];
+                      return { ...prev, workDays: active ? days.filter(x => x !== i) : [...days, i].sort() };
+                    })} style={{
+                      fontSize: 12, fontWeight: 600, padding: "6px 14px", borderRadius: 16, cursor: "pointer",
+                      background: active ? "#1a73e8" : "#fff", color: active ? "#fff" : "#5f6368",
+                      border: `1px solid ${active ? "#1a73e8" : "#dadce0"}`
+                    }}>{d}</button>
+                  );
+                })}
+              </div>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12, marginBottom: 14 }}>
+                <div>
+                  <div style={{ fontSize: 12, color: "#5f6368", marginBottom: 4 }}>Wake Up</div>
+                  <TimeSel value={defaults.wakeTime || "07:00"} onChange={v => setDefaults(prev => ({ ...prev, wakeTime: v }))} />
+                </div>
+                <div>
+                  <div style={{ fontSize: 12, color: "#5f6368", marginBottom: 4 }}>Work Start</div>
+                  <TimeSel value={defaults.workStartTime || "09:00"} onChange={v => setDefaults(prev => ({ ...prev, workStartTime: v }))} />
+                </div>
+                <div>
+                  <div style={{ fontSize: 12, color: "#5f6368", marginBottom: 4 }}>Lunch Start</div>
+                  <TimeSel value={defaults.lunchStartTime || "12:00"} onChange={v => setDefaults(prev => ({ ...prev, lunchStartTime: v }))} />
+                </div>
+                <div>
+                  <div style={{ fontSize: 12, color: "#5f6368", marginBottom: 4 }}>Lunch End</div>
+                  <TimeSel value={defaults.lunchEndTime || "13:00"} onChange={v => setDefaults(prev => ({ ...prev, lunchEndTime: v }))} />
+                </div>
+                <div>
+                  <div style={{ fontSize: 12, color: "#5f6368", marginBottom: 4 }}>Work End</div>
+                  <TimeSel value={defaults.workEndTime || "17:30"} onChange={v => setDefaults(prev => ({ ...prev, workEndTime: v }))} />
+                </div>
+                <div>
+                  <div style={{ fontSize: 12, color: "#5f6368", marginBottom: 4 }}>Bed Time</div>
+                  <TimeSel value={defaults.bedTime || "22:30"} onChange={v => setDefaults(prev => ({ ...prev, bedTime: v }))} />
+                </div>
+              </div>
+            </>
+            ) : (
+            <>
             <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
               <label style={{ fontSize: 15, color: "#3c4043" }}>Contracted Weekly Hours</label>
               <input
@@ -9321,6 +9427,8 @@ export default function WorkHoursTracker({ onImport }) {
               <span style={{ fontSize: 14, color: "#5f6368" }}>to</span>
               <TimeSel value={defaults.endTime} onChange={v => setDefaults(prev => ({ ...prev, endTime: v }))} />
             </div>
+            </>
+            )}
             <div style={{ height: 1, background: "#e8eaed", margin: "16px 0" }} />
             <div style={{ fontSize: 13, fontWeight: 600, color: "#5f6368", textTransform: "uppercase", letterSpacing: "1px", marginBottom: 12 }}>Defaults for new entries</div>
             <div className="wht-grid-3col" style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12 }}>
@@ -9340,7 +9448,7 @@ export default function WorkHoursTracker({ onImport }) {
               )}
               <div>
                 <div style={{ fontSize: 13, color: "#5f6368", marginBottom: 5 }}>Default Activity</div>
-                <FavSel value={defaults.activity} onChange={v => setDefaults(prev => ({ ...prev, activity: v }))} options={getActivitiesForProject(defaults.project)} favouriteNames={config.favouriteActivities || []} placeholder="— None —" />
+                <FavSel value={defaults.activity} onChange={v => setDefaults(prev => ({ ...prev, activity: v }))} options={getActivitiesForProject(defaults.project, defaults.customer)} favouriteNames={config.favouriteActivities || []} placeholder="— None —" />
               </div>
               {!isPersonal && (
               <div>
