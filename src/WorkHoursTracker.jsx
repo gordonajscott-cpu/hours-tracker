@@ -2194,7 +2194,7 @@ export default function WorkHoursTracker({ onImport }) {
 
   function exportTimesheet() {
     try {
-      const rows = [["Date", "Day", "Start", "End", "Hours", "Note", "Activity", !isPersonal && "Work Order", "Project", customerLabel, "Role", "Bill Rate", "Tags"].filter(Boolean).join(",")];
+      const rows = [["Date", "Day", "Start", "End", "Hours", "Note", "Activity", !isPersonal && "Work Order", "Project", customerLabel, !isPersonal && "Role", !isPersonal && "Bill Rate", "Tags"].filter(Boolean).join(",")];
       const sortedKeys = Object.keys(allData).sort();
       sortedKeys.forEach(key => {
         const parts = key.split("-W");
@@ -2211,7 +2211,7 @@ export default function WorkHoursTracker({ onImport }) {
             const s = parseTime(ent.start), e = parseTime(ent.end);
             const hrs = s !== null && e !== null ? fmtH(Math.max(0, e - s)) : "0";
             const esc = v => `"${(v || "").replace(/"/g, '""')}"`;
-            rows.push([dateStr, dayName, ent.start || "", ent.end || "", hrs, esc(ent.note), esc(ent.activity), !isPersonal && esc(ent.workOrder), esc(ent.project), esc(ent.customer), esc(ent.role), esc(ent.billRate), esc((ent.tags || []).join("; "))].filter(v => v !== false).join(","));
+            rows.push([dateStr, dayName, ent.start || "", ent.end || "", hrs, esc(ent.note), esc(ent.activity), !isPersonal && esc(ent.workOrder), esc(ent.project), esc(ent.customer), !isPersonal && esc(ent.role), !isPersonal && esc(ent.billRate), esc((ent.tags || []).join("; "))].filter(v => v !== false).join(","));
           });
         });
       });
@@ -8029,7 +8029,7 @@ export default function WorkHoursTracker({ onImport }) {
           }}>
             <span style={{ fontSize: 13, color: "#5f6368", textTransform: "uppercase", letterSpacing: "1px" }}>Group by</span>
             <div style={{ display: "flex", gap: 3 }}>
-              {[["none","None"],["activity","Activity"],["role","Role"],["billRate","Bill Rate"],!isPersonal && ["workOrder","Work Order"],["project","Project"],["customer",customerLabel],["tag","Tags"]].filter(Boolean).map(([k, l]) => (
+              {[["none","None"],["activity","Activity"],!isPersonal && ["role","Role"],!isPersonal && ["billRate","Bill Rate"],!isPersonal && ["workOrder","Work Order"],["project","Project"],["customer",customerLabel],["tag","Tags"]].filter(Boolean).map(([k, l]) => (
                 <button key={k} onClick={() => setReportGroup(k)} style={{
                   fontFamily: "'Inter', 'Roboto', sans-serif", fontSize: 13, fontWeight: 600, padding: "7px 14px",
                   background: reportGroup === k ? "#1a73e8" : "#ffffff",
@@ -8048,7 +8048,7 @@ export default function WorkHoursTracker({ onImport }) {
           }}>
             <span style={{ fontSize: 13, color: "#5f6368", textTransform: "uppercase", letterSpacing: "1px" }}>Filter by</span>
             <div style={{ display: "flex", gap: 3 }}>
-              {[["none","None"],["activity","Activity"],["role","Role"],["billRate","Bill Rate"],!isPersonal && ["workOrder","Work Order"],["project","Project"],["customer",customerLabel],["tag","Tag"]].filter(Boolean).map(([k, l]) => (
+              {[["none","None"],["activity","Activity"],!isPersonal && ["role","Role"],!isPersonal && ["billRate","Bill Rate"],!isPersonal && ["workOrder","Work Order"],["project","Project"],["customer",customerLabel],["tag","Tag"]].filter(Boolean).map(([k, l]) => (
                 <button key={k} onClick={() => { setReportFilterField(k); setReportFilterValues([]); }} style={{
                   fontFamily: "'Inter', 'Roboto', sans-serif", fontSize: 13, fontWeight: 600, padding: "7px 14px",
                   background: reportFilterField === k ? "#e37400" : "#ffffff",
@@ -9172,6 +9172,8 @@ export default function WorkHoursTracker({ onImport }) {
           </div>
 
           {/* ── SECTION 3: RATES & ROLES ── */}
+          {!isPersonal && (
+          <>
           <div style={{ fontSize: 12, fontWeight: 700, color: "#e37400", textTransform: "uppercase", letterSpacing: "1.5px", marginTop: 18, marginBottom: 6, padding: "0 4px", display: "flex", alignItems: "center", gap: 8 }}>
             <div style={{ flex: 1, height: 1, background: "#f2d8b5" }} />
             Rates & Roles
@@ -9188,6 +9190,8 @@ export default function WorkHoursTracker({ onImport }) {
               })}
             />
           </div>
+          </>
+          )}
           </>
           )}
 
@@ -9338,14 +9342,18 @@ export default function WorkHoursTracker({ onImport }) {
                 <div style={{ fontSize: 13, color: "#5f6368", marginBottom: 5 }}>Default Activity</div>
                 <FavSel value={defaults.activity} onChange={v => setDefaults(prev => ({ ...prev, activity: v }))} options={getActivitiesForProject(defaults.project)} favouriteNames={config.favouriteActivities || []} placeholder="— None —" />
               </div>
+              {!isPersonal && (
               <div>
                 <div style={{ fontSize: 13, color: "#5f6368", marginBottom: 5 }}>Default Role</div>
                 <Sel value={defaults.role} onChange={v => setDefaults(prev => ({ ...prev, role: v }))} options={activeConfig.roles || []} placeholder="— None —" />
               </div>
+              )}
+              {!isPersonal && (
               <div>
                 <div style={{ fontSize: 13, color: "#5f6368", marginBottom: 5 }}>Default Bill Rate</div>
                 <FavSel value={defaults.billRate} onChange={v => setDefaults(prev => ({ ...prev, billRate: v }))} options={activeConfig.billRates || []} favouriteNames={config.favouriteBillRates || []} placeholder="— None —" />
               </div>
+              )}
             </div>
           </div>
 
