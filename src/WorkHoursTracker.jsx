@@ -1803,6 +1803,7 @@ export default function WorkHoursTracker({ onImport }) {
   const [newTaskEntry, setNewTaskEntry] = useState(null);
   const [taskView, setTaskView] = useState("list"); // "list" or "myday"
   const [habitEditing, setHabitEditing] = useState(null);
+  const [habitDay, setHabitDay] = useState(() => dateStr(new Date()));
   const todayStr = dateStr(now);
   const [myDay, setMyDay] = useState({ date: todayStr, frog: "", priorities: [] });
   const [priDragIdx, setPriDragIdx] = useState(null);
@@ -8918,15 +8919,19 @@ export default function WorkHoursTracker({ onImport }) {
       {/* ═══════ HABITS TAB ═══════ */}
       {activeTab === "habits" && isPersonal && (() => {
         const today = dateStr(new Date());
+        const viewDay = habitDay || today;
+        const isViewingToday = viewDay === today;
+        const viewDate = new Date(viewDay + "T00:00:00");
         const habitGroups = config.habitGroups || [];
         const habitLog = config.habitLog || {};
-        const todayLog = habitLog[today] || [];
+        const dayLog = habitLog[viewDay] || [];
         const he = habitEditing;
+        const shiftDay = (delta) => { const d = new Date(viewDate); d.setDate(d.getDate() + delta); setHabitDay(dateStr(d)); };
         const toggleHabit = (habitId) => {
           setConfig(prev => {
             const log = { ...(prev.habitLog || {}) };
-            const dayLog = log[today] || [];
-            log[today] = dayLog.includes(habitId) ? dayLog.filter(id => id !== habitId) : [...dayLog, habitId];
+            const dl = log[viewDay] || [];
+            log[viewDay] = dl.includes(habitId) ? dl.filter(id => id !== habitId) : [...dl, habitId];
             const cutoff = dateStr((() => { const d = new Date(); d.setDate(d.getDate() - 90); return d; })());
             Object.keys(log).forEach(k => { if (k < cutoff) delete log[k]; });
             return { ...prev, habitLog: log };
@@ -8975,7 +8980,7 @@ export default function WorkHoursTracker({ onImport }) {
         };
         const allHabits = habitGroups.flatMap(g => g.habits);
         const totalCount = allHabits.length;
-        const doneCount = allHabits.filter(h => todayLog.includes(h.id)).length;
+        const doneCount = allHabits.filter(h => dayLog.includes(h.id)).length;
 
         const weekDays = [];
         const mon = getMondayOfWeek(currentWeek, currentYear);
@@ -8991,7 +8996,14 @@ export default function WorkHoursTracker({ onImport }) {
         return (
           <div>
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16, flexWrap: "wrap", gap: 8 }}>
-              <div style={{ fontSize: isMobile ? 15 : 18, fontWeight: 700, color: darkMode ? "#e0e0e0" : "#202124" }}>✅ Habits — {new Date().toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long" })}</div>
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <button onClick={() => shiftDay(-1)} style={{ background: "transparent", border: "1px solid #dadce0", color: "#5f6368", padding: "4px 10px", borderRadius: 8, cursor: "pointer", fontSize: 14, fontWeight: 700 }}>‹</button>
+                <div style={{ fontSize: isMobile ? 15 : 18, fontWeight: 700, color: darkMode ? "#e0e0e0" : "#202124" }}>
+                  ✅ {isViewingToday ? "Today" : viewDate.toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" })}
+                </div>
+                <button onClick={() => shiftDay(1)} disabled={viewDay >= today} style={{ background: "transparent", border: "1px solid #dadce0", color: viewDay >= today ? "#dadce0" : "#5f6368", padding: "4px 10px", borderRadius: 8, cursor: viewDay >= today ? "default" : "pointer", fontSize: 14, fontWeight: 700 }}>›</button>
+                {!isViewingToday && <button onClick={() => setHabitDay(today)} style={{ background: "#1a73e8", border: "none", color: "#fff", padding: "4px 12px", borderRadius: 8, cursor: "pointer", fontSize: 12, fontWeight: 600 }}>Today</button>}
+              </div>
               {totalCount > 0 && (
                 <div style={{ fontSize: 14, fontWeight: 600, color: doneCount === totalCount ? "#34a853" : "#e37400" }}>
                   {doneCount}/{totalCount} done
@@ -9017,7 +9029,7 @@ export default function WorkHoursTracker({ onImport }) {
             )}
 
             {habitGroups.map((group, gIdx) => {
-              const groupDone = group.habits.filter(h => todayLog.includes(h.id)).length;
+              const groupDone = group.habits.filter(h => dayLog.includes(h.id)).length;
               const groupTotal = group.habits.length;
               return (
                 <div key={group.id} style={{ background: darkMode ? "#1a1a2e" : "#fff", border: `1px solid ${darkMode ? "#2a2a4a" : "#e8eaed"}`, borderRadius: 12, padding: "16px 20px", marginBottom: 12, boxShadow: "0 1px 3px rgba(0,0,0,0.06)" }}>
@@ -9045,7 +9057,7 @@ export default function WorkHoursTracker({ onImport }) {
                     </div>
                   </div>
                   {group.habits.map((habit, hIdx) => {
-                    const done = todayLog.includes(habit.id);
+                    const done = dayLog.includes(habit.id);
                     if (he?.action === "renameHabit" && he?.hId === habit.id) {
                       return (
                         <div key={habit.id} style={{ padding: "6px 0", borderTop: hIdx > 0 ? `1px solid ${darkMode ? "#2a2a4a" : "#f1f3f4"}` : "none" }}>
