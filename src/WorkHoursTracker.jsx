@@ -5140,6 +5140,7 @@ export default function WorkHoursTracker({ onImport }) {
           ["dashboard", "📊", "Dashboard"],
           ["week", "📅", "Week"],
           ["tasks", "✓", "Tasks"],
+          ...(isPersonal ? [["habits", "✅", "Habits"]] : []),
           ["reports", "📈", "Reports"],
           ...(isPortfolioManager && !isPersonal ? [["portfolio", "👥", "Portfolio"]] : []),
         ].map(([tab, icon, label]) => (
@@ -8938,6 +8939,174 @@ export default function WorkHoursTracker({ onImport }) {
           })()}
         </div>
       )}
+
+      {/* ═══════ HABITS TAB ═══════ */}
+      {activeTab === "habits" && isPersonal && (() => {
+        const today = dateStr(new Date());
+        const habitGroups = config.habitGroups || [];
+        const habitLog = config.habitLog || {};
+        const todayLog = habitLog[today] || [];
+        const toggleHabit = (habitId) => {
+          setConfig(prev => {
+            const log = { ...(prev.habitLog || {}) };
+            const dayLog = log[today] || [];
+            log[today] = dayLog.includes(habitId) ? dayLog.filter(id => id !== habitId) : [...dayLog, habitId];
+            const cutoff = dateStr((() => { const d = new Date(); d.setDate(d.getDate() - 90); return d; })());
+            Object.keys(log).forEach(k => { if (k < cutoff) delete log[k]; });
+            return { ...prev, habitLog: log };
+          });
+        };
+        const addGroup = () => {
+          const name = prompt("Group name (e.g. Morning Habits):");
+          if (!name?.trim()) return;
+          setConfig(prev => ({ ...prev, habitGroups: [...(prev.habitGroups || []), { id: uid(), name: name.trim(), icon: "📋", habits: [] }] }));
+        };
+        const renameGroup = (gId, oldName) => {
+          const name = prompt("Rename group:", oldName);
+          if (!name?.trim() || name.trim() === oldName) return;
+          setConfig(prev => ({ ...prev, habitGroups: (prev.habitGroups || []).map(g => g.id === gId ? { ...g, name: name.trim() } : g) }));
+        };
+        const deleteGroup = (gId) => {
+          if (!confirm("Delete this habit group and all its habits?")) return;
+          setConfig(prev => ({ ...prev, habitGroups: (prev.habitGroups || []).filter(g => g.id !== gId) }));
+        };
+        const setGroupIcon = (gId) => {
+          const icon = prompt("Emoji icon for this group:");
+          if (!icon?.trim()) return;
+          setConfig(prev => ({ ...prev, habitGroups: (prev.habitGroups || []).map(g => g.id === gId ? { ...g, icon: icon.trim() } : g) }));
+        };
+        const addHabit = (gId) => {
+          const name = prompt("Habit name:");
+          if (!name?.trim()) return;
+          setConfig(prev => ({ ...prev, habitGroups: (prev.habitGroups || []).map(g => g.id === gId ? { ...g, habits: [...g.habits, { id: uid(), name: name.trim() }] } : g) }));
+        };
+        const removeHabit = (gId, hId) => {
+          setConfig(prev => ({ ...prev, habitGroups: (prev.habitGroups || []).map(g => g.id === gId ? { ...g, habits: g.habits.filter(h => h.id !== hId) } : g) }));
+        };
+        const renameHabit = (gId, hId, oldName) => {
+          const name = prompt("Rename habit:", oldName);
+          if (!name?.trim() || name.trim() === oldName) return;
+          setConfig(prev => ({ ...prev, habitGroups: (prev.habitGroups || []).map(g => g.id === gId ? { ...g, habits: g.habits.map(h => h.id === hId ? { ...h, name: name.trim() } : h) } : g) }));
+        };
+        const moveHabit = (gId, hIdx, dir) => {
+          setConfig(prev => ({ ...prev, habitGroups: (prev.habitGroups || []).map(g => {
+            if (g.id !== gId) return g;
+            const arr = [...g.habits]; const ni = hIdx + dir;
+            if (ni < 0 || ni >= arr.length) return g;
+            [arr[hIdx], arr[ni]] = [arr[ni], arr[hIdx]];
+            return { ...g, habits: arr };
+          })}));
+        };
+        const allHabits = habitGroups.flatMap(g => g.habits);
+        const totalCount = allHabits.length;
+        const doneCount = allHabits.filter(h => todayLog.includes(h.id)).length;
+
+        const weekDays = [];
+        const mon = getMondayOfWeek(currentWeek, currentYear);
+        for (let i = 0; i < 7; i++) { const d = new Date(mon); d.setDate(d.getDate() + i); weekDays.push(d); }
+
+        return (
+          <div>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16, flexWrap: "wrap", gap: 8 }}>
+              <div style={{ fontSize: isMobile ? 15 : 18, fontWeight: 700, color: darkMode ? "#e0e0e0" : "#202124" }}>✅ Habits — {new Date().toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long" })}</div>
+              {totalCount > 0 && (
+                <div style={{ fontSize: 14, fontWeight: 600, color: doneCount === totalCount ? "#34a853" : "#e37400" }}>
+                  {doneCount}/{totalCount} done
+                </div>
+              )}
+            </div>
+
+            {totalCount > 0 && (
+              <div style={{ background: darkMode ? "#1a1a2e" : "#fff", border: `1px solid ${darkMode ? "#2a2a4a" : "#e8eaed"}`, borderRadius: 12, padding: "12px 16px", marginBottom: 20 }}>
+                <div style={{ height: 8, background: darkMode ? "#2a2a4a" : "#e8eaed", borderRadius: 4, overflow: "hidden" }}>
+                  <div style={{ height: "100%", width: `${totalCount > 0 ? (doneCount / totalCount) * 100 : 0}%`, background: doneCount === totalCount ? "#34a853" : "#f29900", borderRadius: 4, transition: "width 0.3s" }} />
+                </div>
+              </div>
+            )}
+
+            {habitGroups.length === 0 && (
+              <div style={{ textAlign: "center", padding: "40px 20px", color: "#80868b" }}>
+                <div style={{ fontSize: 40, marginBottom: 12 }}>✅</div>
+                <div style={{ fontSize: 16, fontWeight: 600, marginBottom: 8 }}>No habit groups yet</div>
+                <div style={{ fontSize: 13, marginBottom: 16 }}>Create groups like Morning Habits, Bedtime Habits, or Daily Habits</div>
+                <button onClick={addGroup} style={{ background: "#1a73e8", border: "none", color: "#fff", padding: "10px 24px", borderRadius: 20, cursor: "pointer", fontFamily: "'Inter', 'Roboto', sans-serif", fontSize: 13, fontWeight: 700 }}>+ Add First Group</button>
+              </div>
+            )}
+
+            {habitGroups.map(group => {
+              const groupDone = group.habits.filter(h => todayLog.includes(h.id)).length;
+              const groupTotal = group.habits.length;
+              return (
+                <div key={group.id} style={{ background: darkMode ? "#1a1a2e" : "#fff", border: `1px solid ${darkMode ? "#2a2a4a" : "#e8eaed"}`, borderRadius: 12, padding: "16px 20px", marginBottom: 12, boxShadow: "0 1px 3px rgba(0,0,0,0.06)" }}>
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: group.habits.length > 0 ? 12 : 4 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                      <span onClick={() => setGroupIcon(group.id)} style={{ fontSize: 20, cursor: "pointer" }} title="Change icon">{group.icon || "📋"}</span>
+                      <span style={{ fontSize: 16, fontWeight: 700, color: darkMode ? "#e0e0e0" : "#202124" }}>{group.name}</span>
+                      {groupTotal > 0 && <span style={{ fontSize: 12, color: groupDone === groupTotal ? "#34a853" : "#80868b", fontWeight: 600 }}>{groupDone}/{groupTotal}</span>}
+                    </div>
+                    <div style={{ display: "flex", gap: 4 }}>
+                      <button onClick={() => addHabit(group.id)} title="Add habit" style={{ background: "transparent", border: "1px solid #dadce0", color: "#1a73e8", padding: "3px 10px", borderRadius: 12, cursor: "pointer", fontSize: 12, fontWeight: 600 }}>+</button>
+                      <button onClick={() => renameGroup(group.id, group.name)} title="Rename group" style={{ background: "transparent", border: "1px solid #dadce0", color: "#5f6368", padding: "3px 8px", borderRadius: 12, cursor: "pointer", fontSize: 11 }}>✏️</button>
+                      <button onClick={() => deleteGroup(group.id)} title="Delete group" style={{ background: "transparent", border: "1px solid #dadce0", color: "#d93025", padding: "3px 8px", borderRadius: 12, cursor: "pointer", fontSize: 11 }}>🗑</button>
+                    </div>
+                  </div>
+                  {group.habits.map((habit, hIdx) => {
+                    const done = todayLog.includes(habit.id);
+                    return (
+                      <div key={habit.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 0", borderTop: hIdx > 0 ? `1px solid ${darkMode ? "#2a2a4a" : "#f1f3f4"}` : "none" }}>
+                        <button onClick={() => toggleHabit(habit.id)} style={{
+                          width: 28, height: 28, borderRadius: 8, border: `2px solid ${done ? "#34a853" : "#dadce0"}`,
+                          background: done ? "#34a853" : "transparent", color: "#fff", cursor: "pointer",
+                          display: "flex", alignItems: "center", justifyContent: "center", fontSize: 14, fontWeight: 700,
+                          transition: "all 0.2s", flexShrink: 0,
+                        }}>{done ? "✓" : ""}</button>
+                        <span style={{ flex: 1, fontSize: 14, color: done ? "#80868b" : (darkMode ? "#e0e0e0" : "#202124"), textDecoration: done ? "line-through" : "none", transition: "all 0.2s" }}>{habit.name}</span>
+                        <div style={{ display: "flex", gap: 2, opacity: 0.5 }}>
+                          {hIdx > 0 && <button onClick={() => moveHabit(group.id, hIdx, -1)} style={{ background: "transparent", border: "none", cursor: "pointer", fontSize: 10, color: "#5f6368", padding: "2px 4px" }}>▲</button>}
+                          {hIdx < group.habits.length - 1 && <button onClick={() => moveHabit(group.id, hIdx, 1)} style={{ background: "transparent", border: "none", cursor: "pointer", fontSize: 10, color: "#5f6368", padding: "2px 4px" }}>▼</button>}
+                          <button onClick={() => renameHabit(group.id, habit.id, habit.name)} style={{ background: "transparent", border: "none", cursor: "pointer", fontSize: 10, color: "#5f6368", padding: "2px 4px" }}>✏️</button>
+                          <button onClick={() => removeHabit(group.id, habit.id)} style={{ background: "transparent", border: "none", cursor: "pointer", fontSize: 10, color: "#d93025", padding: "2px 4px" }}>✕</button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                  {group.habits.length === 0 && (
+                    <div style={{ fontSize: 13, color: "#80868b", fontStyle: "italic", padding: "8px 0" }}>No habits yet — click + to add one</div>
+                  )}
+                </div>
+              );
+            })}
+
+            {habitGroups.length > 0 && (
+              <button onClick={addGroup} style={{ background: "transparent", border: "1px dashed #dadce0", color: "#1a73e8", padding: "10px 20px", borderRadius: 12, cursor: "pointer", fontFamily: "'Inter', 'Roboto', sans-serif", fontSize: 13, fontWeight: 600, width: "100%", marginBottom: 20 }}>+ Add Group</button>
+            )}
+
+            {totalCount > 0 && (
+              <div style={{ background: darkMode ? "#1a1a2e" : "#fff", border: `1px solid ${darkMode ? "#2a2a4a" : "#e8eaed"}`, borderRadius: 12, padding: "16px 20px", marginTop: 8 }}>
+                <div style={{ fontSize: 15, fontWeight: 700, color: darkMode ? "#e0e0e0" : "#202124", marginBottom: 12 }}>📅 This Week</div>
+                <div style={{ display: "flex", gap: 6 }}>
+                  {weekDays.map((wd, i) => {
+                    const ds = dateStr(wd);
+                    const dayLog = habitLog[ds] || [];
+                    const dayDone = allHabits.filter(h => dayLog.includes(h.id)).length;
+                    const pct = totalCount > 0 ? dayDone / totalCount : 0;
+                    const isToday = ds === today;
+                    const isPast = wd < new Date() && !isToday;
+                    return (
+                      <div key={i} style={{ flex: 1, textAlign: "center", padding: "8px 4px", borderRadius: 8, background: isToday ? (darkMode ? "#1a3a5c" : "#e8f0fe") : "transparent", border: isToday ? "2px solid #1a73e8" : `1px solid ${darkMode ? "#2a2a4a" : "#e8eaed"}` }}>
+                        <div style={{ fontSize: 11, fontWeight: 600, color: "#5f6368" }}>{["Mon","Tue","Wed","Thu","Fri","Sat","Sun"][i]}</div>
+                        <div style={{ width: 24, height: 24, borderRadius: "50%", margin: "6px auto", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 10, fontWeight: 700, background: pct === 1 ? "#34a853" : pct > 0 ? "#fef7e0" : (isPast ? "#fce8e6" : (darkMode ? "#2a2a4a" : "#f1f3f4")), color: pct === 1 ? "#fff" : pct > 0 ? "#e37400" : (isPast ? "#d93025" : "#80868b") }}>
+                          {pct === 1 ? "✓" : dayDone > 0 ? dayDone : (isPast ? "✕" : "—")}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+          </div>
+        );
+      })()}
 
       {/* ═══════ PORTFOLIO TAB ═══════ */}
       {activeTab === "portfolio" && isPortfolioManager && !isPersonal && (
