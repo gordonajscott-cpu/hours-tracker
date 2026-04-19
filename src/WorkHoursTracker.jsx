@@ -3187,8 +3187,59 @@ export default function WorkHoursTracker({ onImport }) {
         if (tmpl) return tmpl.activities;
       }
     }
+    if (isPersonal && !projectName && !customerName) {
+      return allPersonalActivities;
+    }
     return activeConfig.activities || [];
   };
+
+  const allPersonalActivities = useMemo(() => {
+    if (!isPersonal) return [];
+    const seen = new Set();
+    const result = [];
+    const favs = new Set(config.favouriteActivities || []);
+    const favList = [];
+    const nonFavList = [];
+    (activeConfig.activityTemplates || []).forEach(tmpl => {
+      (tmpl.activities || []).forEach(act => {
+        if (!seen.has(act)) {
+          seen.add(act);
+          if (favs.has(act)) favList.push(act); else nonFavList.push(act);
+        }
+      });
+    });
+    (activeConfig.activities || []).forEach(act => {
+      if (!seen.has(act)) {
+        seen.add(act);
+        if (favs.has(act)) favList.push(act); else nonFavList.push(act);
+      }
+    });
+    return [...favList, ...nonFavList];
+  }, [isPersonal, activeConfig.activityTemplates, activeConfig.activities, config.favouriteActivities]);
+
+  const activityOwnerMap = useMemo(() => {
+    if (!isPersonal) return {};
+    const map = {};
+    (activeConfig.projects || []).forEach(p => {
+      if (typeof p === "object" && p.activityTemplate) {
+        const tmpl = (activeConfig.activityTemplates || []).find(t => t.name === p.activityTemplate);
+        if (tmpl) tmpl.activities.forEach(act => {
+          if (!map[act]) map[act] = [];
+          map[act].push({ type: "project", name: getItemName(p), customer: p.customer || "" });
+        });
+      }
+    });
+    (activeConfig.customers || []).forEach(c => {
+      if (typeof c === "object" && c.activityTemplate) {
+        const tmpl = (activeConfig.activityTemplates || []).find(t => t.name === c.activityTemplate);
+        if (tmpl) tmpl.activities.forEach(act => {
+          if (!map[act]) map[act] = [];
+          map[act].push({ type: "area", name: getItemName(c) });
+        });
+      }
+    });
+    return map;
+  }, [isPersonal, activeConfig.projects, activeConfig.customers, activeConfig.activityTemplates]);
 
   const getProjectsForCustomer = (customerName) => {
     const allProjects = getItemNames(activeConfig.projects);
@@ -4996,7 +5047,17 @@ export default function WorkHoursTracker({ onImport }) {
             )}
             <div>
               <div style={{ fontSize: 13, color: "#5f6368", textTransform: "uppercase", letterSpacing: "1px", marginBottom: 5 }}>Activity</div>
-              <FavSel value={timerActivity} onChange={setTimerActivity} options={getActivitiesForProject(timerProject, timerCustomer)} favouriteNames={config.favouriteActivities || []} placeholder="—" />
+              <FavSel value={timerActivity} onChange={v => {
+                setTimerActivity(v);
+                if (isPersonal && v && !timerProject && !timerCustomer) {
+                  const owners = activityOwnerMap[v];
+                  if (owners && owners.length === 1) {
+                    const o = owners[0];
+                    if (o.type === "project") { setTimerProject(o.name); if (o.customer) setTimerCustomer(o.customer); }
+                    else { setTimerCustomer(o.name); }
+                  }
+                }
+              }} options={getActivitiesForProject(timerProject, timerCustomer)} favouriteNames={config.favouriteActivities || []} placeholder="—" />
             </div>
             <div>
               <div style={{ fontSize: 13, color: "#5f6368", textTransform: "uppercase", letterSpacing: "1px", marginBottom: 5 }}>Project</div>
@@ -5617,7 +5678,18 @@ export default function WorkHoursTracker({ onImport }) {
                   )}
                   <div>
                     <div style={{ fontSize: 13, color: "#5f6368", marginBottom: 5 }}>ACTIVITY</div>
-                    <FavSel value={selectedEntry.activity} onChange={v => updateEntry(selectedEntryId, "activity", v)} options={getActivitiesForProject(selectedEntry.project, selectedEntry.customer)} favouriteNames={config.favouriteActivities || []} placeholder="— Select —" />
+                    <FavSel value={selectedEntry.activity} onChange={v => {
+                      if (isPersonal && v && !selectedEntry.project && !selectedEntry.customer) {
+                        const owners = activityOwnerMap[v];
+                        if (owners && owners.length === 1) {
+                          const o = owners[0];
+                          if (o.type === "project") updateEntryFields(selectedEntryId, { activity: v, project: o.name, ...(o.customer ? { customer: o.customer } : {}) });
+                          else updateEntryFields(selectedEntryId, { activity: v, customer: o.name });
+                          return;
+                        }
+                      }
+                      updateEntry(selectedEntryId, "activity", v);
+                    }} options={getActivitiesForProject(selectedEntry.project, selectedEntry.customer)} favouriteNames={config.favouriteActivities || []} placeholder="— Select —" />
                   </div>
                   <div>
                     <div style={{ fontSize: 13, color: "#5f6368", marginBottom: 5 }}>PROJECT</div>
@@ -7804,7 +7876,18 @@ export default function WorkHoursTracker({ onImport }) {
                       else updateTask(task.id, { workOrder: "" });
                     }} options={getWorkOrdersForProject(task.project)} configItems={activeConfig.workOrders} placeholder="Work Order..." />
                     )}
-                    <FavSel small value={task.activity} onChange={v => updateTask(task.id, { activity: v })}
+                    <FavSel small value={task.activity} onChange={v => {
+                      if (isPersonal && v && !task.project && !task.customer) {
+                        const owners = activityOwnerMap[v];
+                        if (owners && owners.length === 1) {
+                          const o = owners[0];
+                          if (o.type === "project") updateTask(task.id, { activity: v, project: o.name, ...(o.customer ? { customer: o.customer } : {}) });
+                          else updateTask(task.id, { activity: v, customer: o.name });
+                          return;
+                        }
+                      }
+                      updateTask(task.id, { activity: v });
+                    }}
                       options={getActivitiesForProject(task.project, task.customer)} favouriteNames={config.favouriteActivities || []} placeholder="Activity..." />
                     <FavSel small value={task.project} onChange={v => updateTask(task.id, { project: v, workOrder: "" })}
                       options={getItemNames(activeConfig.projects)} configItems={activeConfig.projects} placeholder="Project..." />
