@@ -4880,7 +4880,7 @@ export default function WorkHoursTracker({ onImport }) {
             borderRadius: 8, cursor: "pointer", fontSize: 14, flexShrink: 0,
           }}>{darkMode ? "☀️" : "🌙"}</button>
         </div>
-        {!isMobile && <p style={{ color: "#5f6368", fontSize: 14, margin: 0, marginLeft: 52 }}>Contracted: {standardHours}h/week · Track your work hours, overtime, and projects</p>}
+        {!isMobile && <p style={{ color: "#5f6368", fontSize: 14, margin: 0, marginLeft: 52 }}>{isPersonal ? "Track your personal time, projects, and goals" : `Contracted: ${standardHours}h/week · Track your work hours, overtime, and projects`}</p>}
       </div>
 
       {/* ═══ DAILY QUOTE ═══ */}
@@ -5233,28 +5233,52 @@ export default function WorkHoursTracker({ onImport }) {
 
             {/* Unaccounted time this week */}
             <div style={{ background: "#fff", border: "1px solid #e8eaed", borderRadius: 12, padding: "16px 20px", marginTop: 16 }}>
-              <div style={{ fontSize: 15, fontWeight: 700, color: "#202124", marginBottom: 10 }}>⏰ Unaccounted Time This Week</div>
+              <div style={{ fontSize: 15, fontWeight: 700, color: "#202124", marginBottom: 10 }}>{isPersonal ? "🕐 Untracked Free Time This Week" : "⏰ Unaccounted Time This Week"}</div>
               <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                {weekDates.slice(0, 5).map((d, i) => {
-                  const dayEntries = weekData[i] || [];
-                  const tracked = dayEntries.reduce((s, e) => { const es = parseTime(e.start), ee = parseTime(e.end); return (es !== null && ee !== null) ? s + (ee - es) : s; }, 0);
-                  const expected = dailyHrs;
-                  const gap = expected - tracked;
-                  const isPast = d < new Date() && dateStr(d) !== todayS;
-                  const isToday = dateStr(d) === todayS;
-                  return (
-                    <div key={i} style={{
-                      flex: 1, minWidth: 80, padding: "10px", borderRadius: 8, textAlign: "center",
-                      background: gap > 1 && isPast ? "#fce8e6" : gap > 0.5 && isPast ? "#fef7e0" : "#e6f4ea",
-                      border: isToday ? "2px solid #1a73e8" : "1px solid #e8eaed"
-                    }}>
-                      <div style={{ fontSize: 11, fontWeight: 600, color: "#5f6368" }}>{["Mon","Tue","Wed","Thu","Fri"][i]}</div>
-                      <div style={{ fontSize: 16, fontWeight: 700, color: tracked >= expected ? "#34a853" : gap > 1 && isPast ? "#d93025" : "#e37400" }}>{fmtH(tracked)}</div>
-                      <div style={{ fontSize: 10, color: "#80868b" }}>/ {fmtH(expected)}</div>
-                      {gap > 0.5 && isPast && <div style={{ fontSize: 10, fontWeight: 600, color: "#d93025", marginTop: 2 }}>-{fmtH(gap)}</div>}
-                    </div>
-                  );
-                })}
+                {(() => {
+                  const dayNames = ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"];
+                  const days = isPersonal ? weekDates : weekDates.slice(0, 5);
+                  const wd = defaults.workDays || [0,1,2,3,4];
+                  const wake = parseTime(defaults.wakeTime || "07:00") || 7;
+                  const workStart = parseTime(defaults.workStartTime || "09:00") || 9;
+                  const lunchStart = parseTime(defaults.lunchStartTime || "12:00") || 12;
+                  const lunchEnd = parseTime(defaults.lunchEndTime || "13:00") || 13;
+                  const workEnd = parseTime(defaults.workEndTime || "17:30") || 17.5;
+                  const bed = parseTime(defaults.bedTime || "22:30") || 22.5;
+                  return days.map((d, i) => {
+                    const dayEntries = weekData[i] || [];
+                    const tracked = dayEntries.reduce((s, e) => { const es = parseTime(e.start), ee = parseTime(e.end); return (es !== null && ee !== null) ? s + (ee - es) : s; }, 0);
+                    let expected;
+                    if (isPersonal) {
+                      const awakeHrs = bed - wake;
+                      const isWorkDay = wd.includes(i);
+                      const hol = isHoliday(d);
+                      if (isWorkDay && !hol) {
+                        const workHrs = (lunchStart - workStart) + (workEnd - lunchEnd);
+                        expected = awakeHrs - workHrs;
+                      } else {
+                        expected = awakeHrs;
+                      }
+                    } else {
+                      expected = dailyHrs;
+                    }
+                    const gap = expected - tracked;
+                    const isPast = d < new Date() && dateStr(d) !== todayS;
+                    const isTodayD = dateStr(d) === todayS;
+                    return (
+                      <div key={i} style={{
+                        flex: 1, minWidth: isPersonal ? 56 : 80, padding: "10px", borderRadius: 8, textAlign: "center",
+                        background: gap > 1 && isPast ? "#fce8e6" : gap > 0.5 && isPast ? "#fef7e0" : "#e6f4ea",
+                        border: isTodayD ? "2px solid #1a73e8" : "1px solid #e8eaed"
+                      }}>
+                        <div style={{ fontSize: 11, fontWeight: 600, color: "#5f6368" }}>{dayNames[i]}</div>
+                        <div style={{ fontSize: isPersonal ? 14 : 16, fontWeight: 700, color: tracked >= expected ? "#34a853" : gap > 1 && isPast ? "#d93025" : "#e37400" }}>{fmtH(tracked)}</div>
+                        <div style={{ fontSize: 10, color: "#80868b" }}>/ {fmtH(expected)}</div>
+                        {gap > 0.5 && isPast && <div style={{ fontSize: 10, fontWeight: 600, color: "#d93025", marginTop: 2 }}>-{fmtH(gap)}</div>}
+                      </div>
+                    );
+                  });
+                })()}
               </div>
             </div>
           </div>
