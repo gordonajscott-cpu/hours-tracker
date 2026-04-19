@@ -1822,6 +1822,7 @@ export default function WorkHoursTracker({ onImport }) {
   const [newTaskTitle, setNewTaskTitle] = useState("");
   const [newTaskEntry, setNewTaskEntry] = useState(null);
   const [taskView, setTaskView] = useState("list"); // "list" or "myday"
+  const [habitEditing, setHabitEditing] = useState(null);
   const todayStr = dateStr(now);
   const [myDay, setMyDay] = useState({ date: todayStr, frog: "", priorities: [] });
   const [priDragIdx, setPriDragIdx] = useState(null);
@@ -8946,6 +8947,7 @@ export default function WorkHoursTracker({ onImport }) {
         const habitGroups = config.habitGroups || [];
         const habitLog = config.habitLog || {};
         const todayLog = habitLog[today] || [];
+        const he = habitEditing;
         const toggleHabit = (habitId) => {
           setConfig(prev => {
             const log = { ...(prev.habitLog || {}) };
@@ -8956,37 +8958,29 @@ export default function WorkHoursTracker({ onImport }) {
             return { ...prev, habitLog: log };
           });
         };
-        const addGroup = () => {
-          const name = prompt("Group name (e.g. Morning Habits):");
-          if (!name?.trim()) return;
-          setConfig(prev => ({ ...prev, habitGroups: [...(prev.habitGroups || []), { id: uid(), name: name.trim(), icon: "📋", habits: [] }] }));
-        };
-        const renameGroup = (gId, oldName) => {
-          const name = prompt("Rename group:", oldName);
-          if (!name?.trim() || name.trim() === oldName) return;
-          setConfig(prev => ({ ...prev, habitGroups: (prev.habitGroups || []).map(g => g.id === gId ? { ...g, name: name.trim() } : g) }));
-        };
-        const deleteGroup = (gId) => {
-          if (!confirm("Delete this habit group and all its habits?")) return;
-          setConfig(prev => ({ ...prev, habitGroups: (prev.habitGroups || []).filter(g => g.id !== gId) }));
-        };
-        const setGroupIcon = (gId) => {
-          const icon = prompt("Emoji icon for this group:");
-          if (!icon?.trim()) return;
-          setConfig(prev => ({ ...prev, habitGroups: (prev.habitGroups || []).map(g => g.id === gId ? { ...g, icon: icon.trim() } : g) }));
-        };
-        const addHabit = (gId) => {
-          const name = prompt("Habit name:");
-          if (!name?.trim()) return;
-          setConfig(prev => ({ ...prev, habitGroups: (prev.habitGroups || []).map(g => g.id === gId ? { ...g, habits: [...g.habits, { id: uid(), name: name.trim() }] } : g) }));
+        const commitEdit = (val) => {
+          if (!he || !val?.trim()) { setHabitEditing(null); return; }
+          const v = val.trim();
+          if (he.action === "addGroup") {
+            setConfig(prev => ({ ...prev, habitGroups: [...(prev.habitGroups || []), { id: uid(), name: v, icon: "📋", habits: [] }] }));
+          } else if (he.action === "renameGroup") {
+            setConfig(prev => ({ ...prev, habitGroups: (prev.habitGroups || []).map(g => g.id === he.gId ? { ...g, name: v } : g) }));
+          } else if (he.action === "iconGroup") {
+            setConfig(prev => ({ ...prev, habitGroups: (prev.habitGroups || []).map(g => g.id === he.gId ? { ...g, icon: v } : g) }));
+          } else if (he.action === "addHabit") {
+            setConfig(prev => ({ ...prev, habitGroups: (prev.habitGroups || []).map(g => g.id === he.gId ? { ...g, habits: [...g.habits, { id: uid(), name: v }] } : g) }));
+          } else if (he.action === "renameHabit") {
+            setConfig(prev => ({ ...prev, habitGroups: (prev.habitGroups || []).map(g => g.id === he.gId ? { ...g, habits: g.habits.map(h => h.id === he.hId ? { ...h, name: v } : h) } : g) }));
+          }
+          setHabitEditing(null);
         };
         const removeHabit = (gId, hId) => {
           setConfig(prev => ({ ...prev, habitGroups: (prev.habitGroups || []).map(g => g.id === gId ? { ...g, habits: g.habits.filter(h => h.id !== hId) } : g) }));
+          setHabitEditing(null);
         };
-        const renameHabit = (gId, hId, oldName) => {
-          const name = prompt("Rename habit:", oldName);
-          if (!name?.trim() || name.trim() === oldName) return;
-          setConfig(prev => ({ ...prev, habitGroups: (prev.habitGroups || []).map(g => g.id === gId ? { ...g, habits: g.habits.map(h => h.id === hId ? { ...h, name: name.trim() } : h) } : g) }));
+        const deleteGroup = (gId) => {
+          setConfig(prev => ({ ...prev, habitGroups: (prev.habitGroups || []).filter(g => g.id !== gId) }));
+          setHabitEditing(null);
         };
         const moveHabit = (gId, hIdx, dir) => {
           setConfig(prev => ({ ...prev, habitGroups: (prev.habitGroups || []).map(g => {
@@ -8997,6 +8991,14 @@ export default function WorkHoursTracker({ onImport }) {
             return { ...g, habits: arr };
           })}));
         };
+        const moveGroup = (gIdx, dir) => {
+          setConfig(prev => {
+            const arr = [...(prev.habitGroups || [])]; const ni = gIdx + dir;
+            if (ni < 0 || ni >= arr.length) return prev;
+            [arr[gIdx], arr[ni]] = [arr[ni], arr[gIdx]];
+            return { ...prev, habitGroups: arr };
+          });
+        };
         const allHabits = habitGroups.flatMap(g => g.habits);
         const totalCount = allHabits.length;
         const doneCount = allHabits.filter(h => todayLog.includes(h.id)).length;
@@ -9004,6 +9006,13 @@ export default function WorkHoursTracker({ onImport }) {
         const weekDays = [];
         const mon = getMondayOfWeek(currentWeek, currentYear);
         for (let i = 0; i < 7; i++) { const d = new Date(mon); d.setDate(d.getDate() + i); weekDays.push(d); }
+
+        const inlineInput = (placeholder, initial) => (
+          <input autoFocus defaultValue={initial || ""} placeholder={placeholder}
+            onKeyDown={e => { if (e.key === "Enter") commitEdit(e.target.value); if (e.key === "Escape") setHabitEditing(null); }}
+            onBlur={e => commitEdit(e.target.value)}
+            style={{ fontSize: 14, padding: "6px 10px", borderRadius: 8, border: "2px solid #1a73e8", outline: "none", width: "100%", fontFamily: "'Inter', 'Roboto', sans-serif", background: darkMode ? "#1a1a2e" : "#fff", color: darkMode ? "#e0e0e0" : "#202124" }} />
+        );
 
         return (
           <div>
@@ -9024,34 +9033,52 @@ export default function WorkHoursTracker({ onImport }) {
               </div>
             )}
 
-            {habitGroups.length === 0 && (
+            {habitGroups.length === 0 && !he && (
               <div style={{ textAlign: "center", padding: "40px 20px", color: "#80868b" }}>
                 <div style={{ fontSize: 40, marginBottom: 12 }}>✅</div>
                 <div style={{ fontSize: 16, fontWeight: 600, marginBottom: 8 }}>No habit groups yet</div>
                 <div style={{ fontSize: 13, marginBottom: 16 }}>Create groups like Morning Habits, Bedtime Habits, or Daily Habits</div>
-                <button onClick={addGroup} style={{ background: "#1a73e8", border: "none", color: "#fff", padding: "10px 24px", borderRadius: 20, cursor: "pointer", fontFamily: "'Inter', 'Roboto', sans-serif", fontSize: 13, fontWeight: 700 }}>+ Add First Group</button>
+                <button onClick={() => setHabitEditing({ action: "addGroup" })} style={{ background: "#1a73e8", border: "none", color: "#fff", padding: "10px 24px", borderRadius: 20, cursor: "pointer", fontFamily: "'Inter', 'Roboto', sans-serif", fontSize: 13, fontWeight: 700 }}>+ Add First Group</button>
               </div>
             )}
 
-            {habitGroups.map(group => {
+            {habitGroups.map((group, gIdx) => {
               const groupDone = group.habits.filter(h => todayLog.includes(h.id)).length;
               const groupTotal = group.habits.length;
               return (
                 <div key={group.id} style={{ background: darkMode ? "#1a1a2e" : "#fff", border: `1px solid ${darkMode ? "#2a2a4a" : "#e8eaed"}`, borderRadius: 12, padding: "16px 20px", marginBottom: 12, boxShadow: "0 1px 3px rgba(0,0,0,0.06)" }}>
-                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: group.habits.length > 0 ? 12 : 4 }}>
-                    <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                      <span onClick={() => setGroupIcon(group.id)} style={{ fontSize: 20, cursor: "pointer" }} title="Change icon">{group.icon || "📋"}</span>
-                      <span style={{ fontSize: 16, fontWeight: 700, color: darkMode ? "#e0e0e0" : "#202124" }}>{group.name}</span>
-                      {groupTotal > 0 && <span style={{ fontSize: 12, color: groupDone === groupTotal ? "#34a853" : "#80868b", fontWeight: 600 }}>{groupDone}/{groupTotal}</span>}
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: group.habits.length > 0 || (he?.action === "addHabit" && he?.gId === group.id) ? 12 : 4 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8, flex: 1, minWidth: 0 }}>
+                      {he?.action === "iconGroup" && he?.gId === group.id
+                        ? <div style={{ width: 32 }}>{inlineInput("Emoji", group.icon)}</div>
+                        : <span onClick={() => setHabitEditing({ action: "iconGroup", gId: group.id })} style={{ fontSize: 20, cursor: "pointer" }} title="Change icon">{group.icon || "📋"}</span>}
+                      {he?.action === "renameGroup" && he?.gId === group.id
+                        ? <div style={{ flex: 1 }}>{inlineInput("Group name", group.name)}</div>
+                        : <span style={{ fontSize: 16, fontWeight: 700, color: darkMode ? "#e0e0e0" : "#202124" }}>{group.name}</span>}
+                      {groupTotal > 0 && !(he?.gId === group.id && (he?.action === "renameGroup" || he?.action === "iconGroup")) && <span style={{ fontSize: 12, color: groupDone === groupTotal ? "#34a853" : "#80868b", fontWeight: 600 }}>{groupDone}/{groupTotal}</span>}
                     </div>
-                    <div style={{ display: "flex", gap: 4 }}>
-                      <button onClick={() => addHabit(group.id)} title="Add habit" style={{ background: "transparent", border: "1px solid #dadce0", color: "#1a73e8", padding: "3px 10px", borderRadius: 12, cursor: "pointer", fontSize: 12, fontWeight: 600 }}>+</button>
-                      <button onClick={() => renameGroup(group.id, group.name)} title="Rename group" style={{ background: "transparent", border: "1px solid #dadce0", color: "#5f6368", padding: "3px 8px", borderRadius: 12, cursor: "pointer", fontSize: 11 }}>✏️</button>
-                      <button onClick={() => deleteGroup(group.id)} title="Delete group" style={{ background: "transparent", border: "1px solid #dadce0", color: "#d93025", padding: "3px 8px", borderRadius: 12, cursor: "pointer", fontSize: 11 }}>🗑</button>
+                    <div style={{ display: "flex", gap: 4, flexShrink: 0 }}>
+                      {gIdx > 0 && <button onClick={() => moveGroup(gIdx, -1)} title="Move up" style={{ background: "transparent", border: "1px solid #dadce0", color: "#5f6368", padding: "3px 8px", borderRadius: 12, cursor: "pointer", fontSize: 11 }}>▲</button>}
+                      {gIdx < habitGroups.length - 1 && <button onClick={() => moveGroup(gIdx, 1)} title="Move down" style={{ background: "transparent", border: "1px solid #dadce0", color: "#5f6368", padding: "3px 8px", borderRadius: 12, cursor: "pointer", fontSize: 11 }}>▼</button>}
+                      <button onClick={() => setHabitEditing({ action: "addHabit", gId: group.id })} title="Add habit" style={{ background: "transparent", border: "1px solid #dadce0", color: "#1a73e8", padding: "3px 10px", borderRadius: 12, cursor: "pointer", fontSize: 12, fontWeight: 600 }}>+</button>
+                      <button onClick={() => setHabitEditing({ action: "renameGroup", gId: group.id })} title="Rename group" style={{ background: "transparent", border: "1px solid #dadce0", color: "#5f6368", padding: "3px 8px", borderRadius: 12, cursor: "pointer", fontSize: 11 }}>✏️</button>
+                      {he?.action === "deleteGroup" && he?.gId === group.id
+                        ? <>
+                            <button onClick={() => deleteGroup(group.id)} style={{ background: "#d93025", border: "none", color: "#fff", padding: "3px 10px", borderRadius: 12, cursor: "pointer", fontSize: 11, fontWeight: 600 }}>Delete</button>
+                            <button onClick={() => setHabitEditing(null)} style={{ background: "transparent", border: "1px solid #dadce0", color: "#5f6368", padding: "3px 8px", borderRadius: 12, cursor: "pointer", fontSize: 11 }}>Cancel</button>
+                          </>
+                        : <button onClick={() => setHabitEditing({ action: "deleteGroup", gId: group.id })} title="Delete group" style={{ background: "transparent", border: "1px solid #dadce0", color: "#d93025", padding: "3px 8px", borderRadius: 12, cursor: "pointer", fontSize: 11 }}>🗑</button>}
                     </div>
                   </div>
                   {group.habits.map((habit, hIdx) => {
                     const done = todayLog.includes(habit.id);
+                    if (he?.action === "renameHabit" && he?.hId === habit.id) {
+                      return (
+                        <div key={habit.id} style={{ padding: "6px 0", borderTop: hIdx > 0 ? `1px solid ${darkMode ? "#2a2a4a" : "#f1f3f4"}` : "none" }}>
+                          {inlineInput("Habit name", habit.name)}
+                        </div>
+                      );
+                    }
                     return (
                       <div key={habit.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 0", borderTop: hIdx > 0 ? `1px solid ${darkMode ? "#2a2a4a" : "#f1f3f4"}` : "none" }}>
                         <button onClick={() => toggleHabit(habit.id)} style={{
@@ -9064,21 +9091,32 @@ export default function WorkHoursTracker({ onImport }) {
                         <div style={{ display: "flex", gap: 2, opacity: 0.5 }}>
                           {hIdx > 0 && <button onClick={() => moveHabit(group.id, hIdx, -1)} style={{ background: "transparent", border: "none", cursor: "pointer", fontSize: 10, color: "#5f6368", padding: "2px 4px" }}>▲</button>}
                           {hIdx < group.habits.length - 1 && <button onClick={() => moveHabit(group.id, hIdx, 1)} style={{ background: "transparent", border: "none", cursor: "pointer", fontSize: 10, color: "#5f6368", padding: "2px 4px" }}>▼</button>}
-                          <button onClick={() => renameHabit(group.id, habit.id, habit.name)} style={{ background: "transparent", border: "none", cursor: "pointer", fontSize: 10, color: "#5f6368", padding: "2px 4px" }}>✏️</button>
+                          <button onClick={() => setHabitEditing({ action: "renameHabit", gId: group.id, hId: habit.id })} style={{ background: "transparent", border: "none", cursor: "pointer", fontSize: 10, color: "#5f6368", padding: "2px 4px" }}>✏️</button>
                           <button onClick={() => removeHabit(group.id, habit.id)} style={{ background: "transparent", border: "none", cursor: "pointer", fontSize: 10, color: "#d93025", padding: "2px 4px" }}>✕</button>
                         </div>
                       </div>
                     );
                   })}
-                  {group.habits.length === 0 && (
+                  {he?.action === "addHabit" && he?.gId === group.id && (
+                    <div style={{ padding: "6px 0", borderTop: group.habits.length > 0 ? `1px solid ${darkMode ? "#2a2a4a" : "#f1f3f4"}` : "none" }}>
+                      {inlineInput("New habit name...")}
+                    </div>
+                  )}
+                  {group.habits.length === 0 && !(he?.action === "addHabit" && he?.gId === group.id) && (
                     <div style={{ fontSize: 13, color: "#80868b", fontStyle: "italic", padding: "8px 0" }}>No habits yet — click + to add one</div>
                   )}
                 </div>
               );
             })}
 
+            {he?.action === "addGroup" && (
+              <div style={{ background: darkMode ? "#1a1a2e" : "#fff", border: "2px solid #1a73e8", borderRadius: 12, padding: "16px 20px", marginBottom: 12 }}>
+                {inlineInput("Group name (e.g. Morning Habits)")}
+              </div>
+            )}
+
             {habitGroups.length > 0 && (
-              <button onClick={addGroup} style={{ background: "transparent", border: "1px dashed #dadce0", color: "#1a73e8", padding: "10px 20px", borderRadius: 12, cursor: "pointer", fontFamily: "'Inter', 'Roboto', sans-serif", fontSize: 13, fontWeight: 600, width: "100%", marginBottom: 20 }}>+ Add Group</button>
+              <button onClick={() => setHabitEditing({ action: "addGroup" })} style={{ background: "transparent", border: "1px dashed #dadce0", color: "#1a73e8", padding: "10px 20px", borderRadius: 12, cursor: "pointer", fontFamily: "'Inter', 'Roboto', sans-serif", fontSize: 13, fontWeight: 600, width: "100%", marginBottom: 20 }}>+ Add Group</button>
             )}
 
             {totalCount > 0 && (
