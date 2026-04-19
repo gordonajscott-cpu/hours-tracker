@@ -2293,6 +2293,15 @@ export default function WorkHoursTracker({ onImport }) {
     return () => clearTimeout(t);
   }, [allData, config, standardHours, defaults, loading, save]);
 
+  useEffect(() => {
+    if (!userId || userId === "local" || !isPersonal) return;
+    localStorage.setItem(`wht-v3-work-schedule-${userId}`, JSON.stringify({
+      workDays: defaults.workDays ?? [0, 1, 2, 3, 4],
+      workStartTime: defaults.workStartTime || "09:00",
+      workEndTime: defaults.workEndTime || "17:30",
+    }));
+  }, [userId, isPersonal, defaults.workDays, defaults.workStartTime, defaults.workEndTime]);
+
   // ═══ PROFILES ═══
   // Probe the profiles table on mount/user change. If the migration hasn't
   // been run, stay in pre-profiles mode (no filtering). Otherwise hydrate the
@@ -2315,9 +2324,26 @@ export default function WorkHoursTracker({ onImport }) {
         }
         setProfilesAvailable(true);
         setProfiles(list);
-        const storedId = localStorage.getItem(`wht-v3-active-profile-${userId}`);
-        const valid = storedId && list.some(p => p.id === storedId) ? storedId : "default";
-        if (valid !== activeProfileId) setActiveProfileId(valid);
+        let chosen = null;
+        const personalP = list.find(p => p.category === "personal");
+        const workP = list.find(p => p.category === "work");
+        if (personalP && workP) {
+          try {
+            const sched = JSON.parse(localStorage.getItem(`wht-v3-work-schedule-${userId}`) || "null");
+            const wd = sched?.workDays ?? [0, 1, 2, 3, 4];
+            const startH = parseTime(sched?.workStartTime || "09:00") || 9;
+            const endH = parseTime(sched?.workEndTime || "17:30") || 17.5;
+            const now = new Date();
+            const dayIdx = (now.getDay() + 6) % 7;
+            const nowH = now.getHours() + now.getMinutes() / 60;
+            chosen = (wd.includes(dayIdx) && nowH >= startH && nowH < endH) ? workP.id : personalP.id;
+          } catch { /* fall through to stored */ }
+        }
+        if (!chosen) {
+          const storedId = localStorage.getItem(`wht-v3-active-profile-${userId}`);
+          chosen = storedId && list.some(p => p.id === storedId) ? storedId : "default";
+        }
+        if (chosen !== activeProfileId) setActiveProfileId(chosen);
       } catch (err) {
         console.error("Profile probe failed:", err);
         if (!cancelled) setProfilesAvailable(false);
