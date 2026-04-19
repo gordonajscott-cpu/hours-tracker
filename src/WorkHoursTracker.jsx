@@ -1413,7 +1413,7 @@ function ProjectEditor({ items: rawItems, templates, customers, onUpdate, color,
                     onKeyDown={e => e.key === "Enter" && saveEdit(i)} placeholder="Name..."
                     autoFocus
                     style={{ flex: 2, background: "#ffffff", border: "1px solid #1a73e8", color: "#202124", padding: "6px 10px", borderRadius: 4, fontFamily: "'Inter', 'Roboto', sans-serif", fontSize: 14, outline: "none" }} />
-                  {!personalMode && <input value={editCode} onChange={e => setEditCode(e.target.value)}
+                  {!personalMode && !areaMode && <input value={editCode} onChange={e => setEditCode(e.target.value)}
                     onKeyDown={e => e.key === "Enter" && saveEdit(i)} placeholder="Code..."
                     style={{ flex: 1, background: "#ffffff", border: "1px solid #1a73e8", color: "#202124", padding: "6px 10px", borderRadius: 4, fontFamily: "'Inter', 'Roboto', sans-serif", fontSize: 14, outline: "none" }} />}
                   <button onClick={() => saveEdit(i)} style={{ background: "#1a73e8", border: "none", color: "#fff", padding: "4px 12px", borderRadius: 4, cursor: "pointer", fontSize: 12, fontWeight: 600 }}>Save</button>
