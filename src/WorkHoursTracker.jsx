@@ -900,12 +900,15 @@ function AdminList({ title, items: rawItems, onUpdate, color, favourites, onTogg
   const [confirmIdx, setConfirmIdx] = useState(null);
   const [dragIdx, setDragIdx] = useState(null);
 
-  function add() { if (val.trim() && !items.includes(val.trim())) { onUpdate([...items, val.trim()]); setVal(""); } }
+  function add() {
+    const v = val.trim();
+    if (v && !items.some(it => getItemName(it) === v)) { onUpdate([...items, v]); setVal(""); }
+  }
   function remove(idx) { onUpdate(items.filter((_, i) => i !== idx)); setConfirmIdx(null); }
-  function startEdit(idx) { setEditIdx(idx); setEditVal(items[idx]); setConfirmIdx(null); }
+  function startEdit(idx) { setEditIdx(idx); setEditVal(getItemName(items[idx]) || ""); setConfirmIdx(null); }
   function saveEdit(idx) {
     if (editVal.trim()) {
-      onUpdate(items.map((it, i) => i === idx ? editVal.trim() : it));
+      onUpdate(items.map((it, i) => i === idx ? (typeof it === "object" && it ? { ...it, name: editVal.trim() } : editVal.trim()) : it));
     }
     setEditIdx(null);
   }
@@ -922,8 +925,8 @@ function AdminList({ title, items: rawItems, onUpdate, color, favourites, onTogg
   // Display order: favourites first, then others, preserving relative order
   const displayOrder = useMemo(() => {
     const indexed = items.map((item, idx) => ({ item, idx }));
-    const favItems = indexed.filter(x => favSet.has(x.item));
-    const nonFavItems = indexed.filter(x => !favSet.has(x.item));
+    const favItems = indexed.filter(x => favSet.has(getItemName(x.item)));
+    const nonFavItems = indexed.filter(x => !favSet.has(getItemName(x.item)));
     return [...favItems, ...nonFavItems];
   }, [items, favourites]);
 
@@ -942,14 +945,16 @@ function AdminList({ title, items: rawItems, onUpdate, color, favourites, onTogg
       <div style={{ display: "flex", flexDirection: "column", gap: 1, maxHeight: 280, overflowY: "auto" }}>
         {items.length === 0 && <div style={{ fontSize: 13, color: "#80868b", fontStyle: "italic" }}>No {title.toLowerCase()} added yet</div>}
         {displayOrder.map(({ item, idx: i }, displayIdx) => {
-          const isFavItem = favSet.has(item);
-          const cat = catMap[item] || "";
+          const itemName = getItemName(item);
+          const isFavItem = favSet.has(itemName);
+          const cat = catMap[itemName] || "";
           const catStyle = catColors[cat];
-          const showDivider = !isFavItem && displayIdx > 0 && favSet.has(displayOrder[displayIdx - 1]?.item);
+          const prevItem = displayOrder[displayIdx - 1]?.item;
+          const showDivider = !isFavItem && displayIdx > 0 && favSet.has(getItemName(prevItem));
           return (
-          <React.Fragment key={item + i}>
+          <React.Fragment key={itemName + i}>
           {showDivider && <div style={{ height: 1, background: "#e8eaed", margin: "2px 0" }} />}
-          <div key={item + i}
+          <div key={itemName + i}
             draggable={editIdx !== i}
             onDragStart={e => { setDragIdx(i); e.dataTransfer.effectAllowed = "move"; }}
             onDragOver={e => { e.preventDefault(); }}
@@ -981,12 +986,12 @@ function AdminList({ title, items: rawItems, onUpdate, color, favourites, onTogg
                     fontSize: 9, padding: 0, lineHeight: 1
                   }}>▶</button>
                 </div>
-                {onToggleFav && <span onClick={() => onToggleFav(item)} style={{ cursor: "pointer", fontSize: 14, color: isFavItem ? "#fbbc04" : "#dadce0", flexShrink: 0, lineHeight: 1 }} title={isFavItem ? "Remove from favourites" : "Add to favourites"}>{isFavItem ? "★" : "☆"}</span>}
-                <span onClick={() => startEdit(i)} style={{ fontSize: 12, color: "#202124", cursor: "pointer", flex: 1 }} title="Click to edit">{item}</span>
+                {onToggleFav && <span onClick={() => onToggleFav(itemName)} style={{ cursor: "pointer", fontSize: 14, color: isFavItem ? "#fbbc04" : "#dadce0", flexShrink: 0, lineHeight: 1 }} title={isFavItem ? "Remove from favourites" : "Add to favourites"}>{isFavItem ? "★" : "☆"}</span>}
+                <span onClick={() => startEdit(i)} style={{ fontSize: 12, color: "#202124", cursor: "pointer", flex: 1 }} title="Click to edit">{itemName}</span>
                 {onSetCategory && (
                   <div style={{ display: "flex", gap: 3, flexShrink: 0 }}>
                     {["good", "bad"].map(c => (
-                      <button key={c} onClick={() => onSetCategory(item, cat === c ? "" : c)} style={{
+                      <button key={c} onClick={() => onSetCategory(itemName, cat === c ? "" : c)} style={{
                         fontSize: 11, fontWeight: 600, padding: "2px 8px", borderRadius: 10, cursor: "pointer",
                         background: cat === c ? catColors[c].bg : "transparent",
                         color: cat === c ? catColors[c].text : "#bdc1c6",
