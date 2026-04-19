@@ -3213,8 +3213,59 @@ export default function WorkHoursTracker({ onImport }) {
         if (tmpl) return tmpl.activities;
       }
     }
+    if (isPersonal && !projectName && !customerName) {
+      return allPersonalActivities;
+    }
     return activeConfig.activities || [];
   };
+
+  const allPersonalActivities = useMemo(() => {
+    if (!isPersonal) return [];
+    const seen = new Set();
+    const result = [];
+    const favs = new Set(config.favouriteActivities || []);
+    const favList = [];
+    const nonFavList = [];
+    (activeConfig.activityTemplates || []).forEach(tmpl => {
+      (tmpl.activities || []).forEach(act => {
+        if (!seen.has(act)) {
+          seen.add(act);
+          if (favs.has(act)) favList.push(act); else nonFavList.push(act);
+        }
+      });
+    });
+    (activeConfig.activities || []).forEach(act => {
+      if (!seen.has(act)) {
+        seen.add(act);
+        if (favs.has(act)) favList.push(act); else nonFavList.push(act);
+      }
+    });
+    return [...favList, ...nonFavList];
+  }, [isPersonal, activeConfig.activityTemplates, activeConfig.activities, config.favouriteActivities]);
+
+  const activityOwnerMap = useMemo(() => {
+    if (!isPersonal) return {};
+    const map = {};
+    (activeConfig.projects || []).forEach(p => {
+      if (typeof p === "object" && p.activityTemplate) {
+        const tmpl = (activeConfig.activityTemplates || []).find(t => t.name === p.activityTemplate);
+        if (tmpl) tmpl.activities.forEach(act => {
+          if (!map[act]) map[act] = [];
+          map[act].push({ type: "project", name: getItemName(p), customer: p.customer || "" });
+        });
+      }
+    });
+    (activeConfig.customers || []).forEach(c => {
+      if (typeof c === "object" && c.activityTemplate) {
+        const tmpl = (activeConfig.activityTemplates || []).find(t => t.name === c.activityTemplate);
+        if (tmpl) tmpl.activities.forEach(act => {
+          if (!map[act]) map[act] = [];
+          map[act].push({ type: "area", name: getItemName(c) });
+        });
+      }
+    });
+    return map;
+  }, [isPersonal, activeConfig.projects, activeConfig.customers, activeConfig.activityTemplates]);
 
   const getProjectsForCustomer = (customerName) => {
     const allProjects = getItemNames(activeConfig.projects);
@@ -4855,7 +4906,7 @@ export default function WorkHoursTracker({ onImport }) {
             borderRadius: 8, cursor: "pointer", fontSize: 14, flexShrink: 0,
           }}>{darkMode ? "☀️" : "🌙"}</button>
         </div>
-        {!isMobile && <p style={{ color: "#5f6368", fontSize: 14, margin: 0, marginLeft: 52 }}>Contracted: {standardHours}h/week · Track your work hours, overtime, and projects</p>}
+        {!isMobile && <p style={{ color: "#5f6368", fontSize: 14, margin: 0, marginLeft: 52 }}>{isPersonal ? "Track your personal time, projects, and goals" : `Contracted: ${standardHours}h/week · Track your work hours, overtime, and projects`}</p>}
       </div>
 
       {/* ═══ DAILY QUOTE ═══ */}
@@ -5022,7 +5073,17 @@ export default function WorkHoursTracker({ onImport }) {
             )}
             <div>
               <div style={{ fontSize: 13, color: "#5f6368", textTransform: "uppercase", letterSpacing: "1px", marginBottom: 5 }}>Activity</div>
-              <FavSel value={timerActivity} onChange={setTimerActivity} options={getActivitiesForProject(timerProject, timerCustomer)} favouriteNames={config.favouriteActivities || []} placeholder="—" />
+              <FavSel value={timerActivity} onChange={v => {
+                setTimerActivity(v);
+                if (isPersonal && v && !timerProject && !timerCustomer) {
+                  const owners = activityOwnerMap[v];
+                  if (owners && owners.length === 1) {
+                    const o = owners[0];
+                    if (o.type === "project") { setTimerProject(o.name); if (o.customer) setTimerCustomer(o.customer); }
+                    else { setTimerCustomer(o.name); }
+                  }
+                }
+              }} options={getActivitiesForProject(timerProject, timerCustomer)} favouriteNames={config.favouriteActivities || []} placeholder="—" />
             </div>
             <div>
               <div style={{ fontSize: 13, color: "#5f6368", textTransform: "uppercase", letterSpacing: "1px", marginBottom: 5 }}>Project</div>
@@ -5198,28 +5259,52 @@ export default function WorkHoursTracker({ onImport }) {
 
             {/* Unaccounted time this week */}
             <div style={{ background: "#fff", border: "1px solid #e8eaed", borderRadius: 12, padding: "16px 20px", marginTop: 16 }}>
-              <div style={{ fontSize: 15, fontWeight: 700, color: "#202124", marginBottom: 10 }}>⏰ Unaccounted Time This Week</div>
+              <div style={{ fontSize: 15, fontWeight: 700, color: "#202124", marginBottom: 10 }}>{isPersonal ? "🕐 Untracked Free Time This Week" : "⏰ Unaccounted Time This Week"}</div>
               <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                {weekDates.slice(0, 5).map((d, i) => {
-                  const dayEntries = weekData[i] || [];
-                  const tracked = dayEntries.reduce((s, e) => { const es = parseTime(e.start), ee = parseTime(e.end); return (es !== null && ee !== null) ? s + (ee - es) : s; }, 0);
-                  const expected = dailyHrs;
-                  const gap = expected - tracked;
-                  const isPast = d < new Date() && dateStr(d) !== todayS;
-                  const isToday = dateStr(d) === todayS;
-                  return (
-                    <div key={i} style={{
-                      flex: 1, minWidth: 80, padding: "10px", borderRadius: 8, textAlign: "center",
-                      background: gap > 1 && isPast ? "#fce8e6" : gap > 0.5 && isPast ? "#fef7e0" : "#e6f4ea",
-                      border: isToday ? "2px solid #1a73e8" : "1px solid #e8eaed"
-                    }}>
-                      <div style={{ fontSize: 11, fontWeight: 600, color: "#5f6368" }}>{["Mon","Tue","Wed","Thu","Fri"][i]}</div>
-                      <div style={{ fontSize: 16, fontWeight: 700, color: tracked >= expected ? "#34a853" : gap > 1 && isPast ? "#d93025" : "#e37400" }}>{fmtH(tracked)}</div>
-                      <div style={{ fontSize: 10, color: "#80868b" }}>/ {fmtH(expected)}</div>
-                      {gap > 0.5 && isPast && <div style={{ fontSize: 10, fontWeight: 600, color: "#d93025", marginTop: 2 }}>-{fmtH(gap)}</div>}
-                    </div>
-                  );
-                })}
+                {(() => {
+                  const dayNames = ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"];
+                  const days = isPersonal ? weekDates : weekDates.slice(0, 5);
+                  const wd = defaults.workDays || [0,1,2,3,4];
+                  const wake = parseTime(defaults.wakeTime || "07:00") || 7;
+                  const workStart = parseTime(defaults.workStartTime || "09:00") || 9;
+                  const lunchStart = parseTime(defaults.lunchStartTime || "12:00") || 12;
+                  const lunchEnd = parseTime(defaults.lunchEndTime || "13:00") || 13;
+                  const workEnd = parseTime(defaults.workEndTime || "17:30") || 17.5;
+                  const bed = parseTime(defaults.bedTime || "22:30") || 22.5;
+                  return days.map((d, i) => {
+                    const dayEntries = weekData[i] || [];
+                    const tracked = dayEntries.reduce((s, e) => { const es = parseTime(e.start), ee = parseTime(e.end); return (es !== null && ee !== null) ? s + (ee - es) : s; }, 0);
+                    let expected;
+                    if (isPersonal) {
+                      const awakeHrs = bed - wake;
+                      const isWorkDay = wd.includes(i);
+                      const hol = isHoliday(d);
+                      if (isWorkDay && !hol) {
+                        const workHrs = (lunchStart - workStart) + (workEnd - lunchEnd);
+                        expected = awakeHrs - workHrs;
+                      } else {
+                        expected = awakeHrs;
+                      }
+                    } else {
+                      expected = dailyHrs;
+                    }
+                    const gap = expected - tracked;
+                    const isPast = d < new Date() && dateStr(d) !== todayS;
+                    const isTodayD = dateStr(d) === todayS;
+                    return (
+                      <div key={i} style={{
+                        flex: 1, minWidth: isPersonal ? 56 : 80, padding: "10px", borderRadius: 8, textAlign: "center",
+                        background: gap > 1 && isPast ? "#fce8e6" : gap > 0.5 && isPast ? "#fef7e0" : "#e6f4ea",
+                        border: isTodayD ? "2px solid #1a73e8" : "1px solid #e8eaed"
+                      }}>
+                        <div style={{ fontSize: 11, fontWeight: 600, color: "#5f6368" }}>{dayNames[i]}</div>
+                        <div style={{ fontSize: isPersonal ? 14 : 16, fontWeight: 700, color: tracked >= expected ? "#34a853" : gap > 1 && isPast ? "#d93025" : "#e37400" }}>{fmtH(tracked)}</div>
+                        <div style={{ fontSize: 10, color: "#80868b" }}>/ {fmtH(expected)}</div>
+                        {gap > 0.5 && isPast && <div style={{ fontSize: 10, fontWeight: 600, color: "#d93025", marginTop: 2 }}>-{fmtH(gap)}</div>}
+                      </div>
+                    );
+                  });
+                })()}
               </div>
             </div>
           </div>
@@ -5643,7 +5728,18 @@ export default function WorkHoursTracker({ onImport }) {
                   )}
                   <div>
                     <div style={{ fontSize: 13, color: "#5f6368", marginBottom: 5 }}>ACTIVITY</div>
-                    <FavSel value={selectedEntry.activity} onChange={v => updateEntry(selectedEntryId, "activity", v)} options={getActivitiesForProject(selectedEntry.project, selectedEntry.customer)} favouriteNames={config.favouriteActivities || []} placeholder="— Select —" />
+                    <FavSel value={selectedEntry.activity} onChange={v => {
+                      if (isPersonal && v && !selectedEntry.project && !selectedEntry.customer) {
+                        const owners = activityOwnerMap[v];
+                        if (owners && owners.length === 1) {
+                          const o = owners[0];
+                          if (o.type === "project") updateEntryFields(selectedEntryId, { activity: v, project: o.name, ...(o.customer ? { customer: o.customer } : {}) });
+                          else updateEntryFields(selectedEntryId, { activity: v, customer: o.name });
+                          return;
+                        }
+                      }
+                      updateEntry(selectedEntryId, "activity", v);
+                    }} options={getActivitiesForProject(selectedEntry.project, selectedEntry.customer)} favouriteNames={config.favouriteActivities || []} placeholder="— Select —" />
                   </div>
                   <div>
                     <div style={{ fontSize: 13, color: "#5f6368", marginBottom: 5 }}>PROJECT</div>
@@ -7830,7 +7926,18 @@ export default function WorkHoursTracker({ onImport }) {
                       else updateTask(task.id, { workOrder: "" });
                     }} options={getWorkOrdersForProject(task.project)} configItems={activeConfig.workOrders} placeholder="Work Order..." />
                     )}
-                    <FavSel small value={task.activity} onChange={v => updateTask(task.id, { activity: v })}
+                    <FavSel small value={task.activity} onChange={v => {
+                      if (isPersonal && v && !task.project && !task.customer) {
+                        const owners = activityOwnerMap[v];
+                        if (owners && owners.length === 1) {
+                          const o = owners[0];
+                          if (o.type === "project") updateTask(task.id, { activity: v, project: o.name, ...(o.customer ? { customer: o.customer } : {}) });
+                          else updateTask(task.id, { activity: v, customer: o.name });
+                          return;
+                        }
+                      }
+                      updateTask(task.id, { activity: v });
+                    }}
                       options={getActivitiesForProject(task.project, task.customer)} favouriteNames={config.favouriteActivities || []} placeholder="Activity..." />
                     <FavSel small value={task.project} onChange={v => updateTask(task.id, { project: v, workOrder: "" })}
                       options={getItemNames(activeConfig.projects)} configItems={activeConfig.projects} placeholder="Project..." />
