@@ -2160,7 +2160,18 @@ export default function WorkHoursTracker({ onImport }) {
   function exportData() {
     try {
       const json = JSON.stringify({ data: allData, config, settings: { standardHours, defaults }, tasks }, null, 2);
-      setShowExport(json);
+      const blob = new Blob([json], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      const stamp = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
+      const profileName = (activeProfile?.name || "default").replace(/[^a-zA-Z0-9]/g, "-");
+      a.href = url;
+      a.download = `hours-tracker-${profileName}-${stamp}.json`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      setSaveStatus("exported"); setTimeout(() => setSaveStatus(""), 2000);
     } catch (e) { setSaveStatus("export error"); }
   }
 
@@ -2187,13 +2198,25 @@ export default function WorkHoursTracker({ onImport }) {
           });
         });
       });
-      setShowTimesheetExport(rows.join("\n"));
+      const csv = rows.join("\n");
+      const blob = new Blob([csv], { type: "text/csv" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      const stamp = new Date().toISOString().replace(/[:.]/g, "-").slice(0, 19);
+      const profileName = (activeProfile?.name || "default").replace(/[^a-zA-Z0-9]/g, "-");
+      a.href = url;
+      a.download = `timesheet-${profileName}-${stamp}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      setSaveStatus("exported"); setTimeout(() => setSaveStatus(""), 2000);
     } catch (e) { setSaveStatus("export error"); }
   }
 
-  function doImport() {
+  function doImport(text) {
     try {
-      const imported = JSON.parse(importText);
+      const imported = JSON.parse(text || importText);
       if (imported.data) setAllData(imported.data);
       if (imported.config) setConfig(prev => ({ ...prev, ...imported.config }));
       if (imported.settings) {
@@ -2204,6 +2227,17 @@ export default function WorkHoursTracker({ onImport }) {
       setShowImport(false); setImportText("");
       setSaveStatus("imported"); setTimeout(() => setSaveStatus(""), 3000);
     } catch (err) { setSaveStatus("import error — invalid JSON"); setTimeout(() => setSaveStatus(""), 3000); }
+  }
+
+  function handleImportFile(e) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      doImport(ev.target.result);
+    };
+    reader.onerror = () => { setSaveStatus("file read error"); setTimeout(() => setSaveStatus(""), 3000); };
+    reader.readAsText(file);
   }
 
   async function refreshFromStorage() {
@@ -9820,86 +9854,36 @@ export default function WorkHoursTracker({ onImport }) {
         </div>
         ); })()}
 
-      {/* Export Modal */}
-      {showExport && (
-        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", zIndex: 100, display: "flex", alignItems: "center", justifyContent: "center" }}
-          onClick={() => setShowExport(null)}>
-          <div onClick={e => e.stopPropagation()} style={{
-            background: "#ffffff", borderRadius: 16, padding: "24px 28px", maxWidth: 600, width: "90%",
-            maxHeight: "80vh", display: "flex", flexDirection: "column", boxShadow: "0 8px 30px rgba(0,0,0,0.2)"
-          }}>
-            <div style={{ fontSize: 18, fontWeight: 700, color: "#202124", marginBottom: 8 }}>Export Backup</div>
-            <div style={{ fontSize: 13, color: "#5f6368", marginBottom: 12 }}>Copy the text below and save it to a file. To restore, paste it into Import.</div>
-            <textarea readOnly value={showExport} style={{
-              flex: 1, minHeight: 200, background: "#f8f9fa", border: "1px solid #dadce0", borderRadius: 8,
-              padding: 12, fontFamily: "monospace", fontSize: 12, color: "#202124", resize: "vertical", outline: "none"
-            }} onFocus={e => e.target.select()} />
-            <div style={{ display: "flex", gap: 8, marginTop: 14, justifyContent: "flex-end" }}>
-              <button onClick={() => { navigator.clipboard.writeText(showExport).then(() => { setSaveStatus("copied"); setTimeout(() => setSaveStatus(""), 2000); }); }} style={{
-                background: "#1a73e8", border: "none", color: "#fff", padding: "10px 24px",
-                borderRadius: 20, cursor: "pointer", fontFamily: "'Inter', 'Roboto', sans-serif", fontSize: 14, fontWeight: 600
-              }}>Copy to Clipboard</button>
-              <button onClick={() => setShowExport(null)} style={{
-                background: "#f1f3f4", border: "1px solid #dadce0", color: "#5f6368", padding: "10px 20px",
-                borderRadius: 20, cursor: "pointer", fontFamily: "'Inter', 'Roboto', sans-serif", fontSize: 14
-              }}>Close</button>
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* Import Modal */}
       {showImport && (
         <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", zIndex: 100, display: "flex", alignItems: "center", justifyContent: "center" }}
           onClick={() => { setShowImport(false); setImportText(""); }}>
           <div onClick={e => e.stopPropagation()} style={{
-            background: "#ffffff", borderRadius: 16, padding: "24px 28px", maxWidth: 600, width: "90%",
-            maxHeight: "80vh", display: "flex", flexDirection: "column", boxShadow: "0 8px 30px rgba(0,0,0,0.2)"
+            background: "#ffffff", borderRadius: 16, padding: "24px 28px", maxWidth: 500, width: "90%",
+            boxShadow: "0 8px 30px rgba(0,0,0,0.2)"
           }}>
             <div style={{ fontSize: 18, fontWeight: 700, color: "#202124", marginBottom: 8 }}>Import Backup</div>
-            <div style={{ fontSize: 13, color: "#5f6368", marginBottom: 12 }}>Paste your previously exported backup JSON below.</div>
-            <textarea value={importText} onChange={e => setImportText(e.target.value)} placeholder="Paste backup JSON here..."
-              style={{
-                flex: 1, minHeight: 200, background: "#f8f9fa", border: "1px solid #dadce0", borderRadius: 8,
-                padding: 12, fontFamily: "monospace", fontSize: 12, color: "#202124", resize: "vertical", outline: "none"
-              }} />
-            <div style={{ display: "flex", gap: 8, marginTop: 14, justifyContent: "flex-end" }}>
-              <button onClick={doImport} disabled={!importText.trim()} style={{
-                background: importText.trim() ? "#34a853" : "#dadce0", border: "none", color: "#fff", padding: "10px 24px",
-                borderRadius: 20, cursor: importText.trim() ? "pointer" : "not-allowed", fontFamily: "'Inter', 'Roboto', sans-serif", fontSize: 14, fontWeight: 600
-              }}>Restore Data</button>
+            <div style={{ fontSize: 13, color: "#5f6368", marginBottom: 16 }}>Select a previously exported .json backup file to restore.</div>
+            <label style={{
+              display: "flex", alignItems: "center", justifyContent: "center", padding: "32px 20px",
+              border: "2px dashed #dadce0", borderRadius: 12, cursor: "pointer", background: "#f8f9fa",
+              marginBottom: 16, transition: "border-color 0.2s"
+            }}
+              onMouseEnter={e => e.currentTarget.style.borderColor = "#1a73e8"}
+              onMouseLeave={e => e.currentTarget.style.borderColor = "#dadce0"}>
+              <div style={{ textAlign: "center" }}>
+                <div style={{ fontSize: 32, marginBottom: 8 }}>📁</div>
+                <div style={{ fontSize: 14, fontWeight: 600, color: "#1a73e8" }}>Choose backup file</div>
+                <div style={{ fontSize: 12, color: "#80868b", marginTop: 4 }}>.json files only</div>
+              </div>
+              <input type="file" accept=".json,application/json" onChange={handleImportFile}
+                style={{ display: "none" }} />
+            </label>
+            <div style={{ display: "flex", gap: 8, justifyContent: "flex-end" }}>
               <button onClick={() => { setShowImport(false); setImportText(""); }} style={{
                 background: "#f1f3f4", border: "1px solid #dadce0", color: "#5f6368", padding: "10px 20px",
                 borderRadius: 20, cursor: "pointer", fontFamily: "'Inter', 'Roboto', sans-serif", fontSize: 14
               }}>Cancel</button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Timesheet Export Modal */}
-      {showTimesheetExport && (
-        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", zIndex: 100, display: "flex", alignItems: "center", justifyContent: "center" }}
-          onClick={() => setShowTimesheetExport(null)}>
-          <div onClick={e => e.stopPropagation()} style={{
-            background: "#ffffff", borderRadius: 16, padding: "24px 28px", maxWidth: 700, width: "90%",
-            maxHeight: "80vh", display: "flex", flexDirection: "column", boxShadow: "0 8px 30px rgba(0,0,0,0.2)"
-          }}>
-            <div style={{ fontSize: 18, fontWeight: 700, color: "#202124", marginBottom: 8 }}>Export Timesheet</div>
-            <div style={{ fontSize: 13, color: "#5f6368", marginBottom: 12 }}>CSV format — copy and paste into a spreadsheet or save as a .csv file.</div>
-            <textarea readOnly value={showTimesheetExport} style={{
-              flex: 1, minHeight: 250, background: "#f8f9fa", border: "1px solid #dadce0", borderRadius: 8,
-              padding: 12, fontFamily: "monospace", fontSize: 11, color: "#202124", resize: "vertical", outline: "none", whiteSpace: "pre"
-            }} onFocus={e => e.target.select()} />
-            <div style={{ display: "flex", gap: 8, marginTop: 14, justifyContent: "flex-end" }}>
-              <button onClick={() => { navigator.clipboard.writeText(showTimesheetExport).then(() => { setSaveStatus("copied"); setTimeout(() => setSaveStatus(""), 2000); }); }} style={{
-                background: "#34a853", border: "none", color: "#fff", padding: "10px 24px",
-                borderRadius: 20, cursor: "pointer", fontFamily: "'Inter', 'Roboto', sans-serif", fontSize: 14, fontWeight: 600
-              }}>Copy to Clipboard</button>
-              <button onClick={() => setShowTimesheetExport(null)} style={{
-                background: "#f1f3f4", border: "1px solid #dadce0", color: "#5f6368", padding: "10px 20px",
-                borderRadius: 20, cursor: "pointer", fontFamily: "'Inter', 'Roboto', sans-serif", fontSize: 14
-              }}>Close</button>
             </div>
           </div>
         </div>
