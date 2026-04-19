@@ -1808,6 +1808,12 @@ export default function WorkHoursTracker({ onImport }) {
   // Whether the current user manages any portfolio (shows portfolio tab)
   const isPortfolioManager = myPortfolioMemberships.some(m => m.role === 'manager');
 
+  // Portfolios belong to work orgs; bail out of the portfolio tab when the
+  // active profile is personal so the user doesn't land on a blank screen.
+  useEffect(() => {
+    if (isPersonal && activeTab === "portfolio") setActiveTab("dashboard");
+  }, [isPersonal, activeTab]);
+
   const [taskFilter, setTaskFilter] = useState("all"); // all, not_started, in_progress, on_hold
   const [taskSort, setTaskSort] = useState("priority"); // priority, due, title
   const [taskDurationFilter, setTaskDurationFilter] = useState(0);
@@ -5006,7 +5012,7 @@ export default function WorkHoursTracker({ onImport }) {
           ["week", "📅", "Week"],
           ["tasks", "✓", "Tasks"],
           ["reports", "📈", "Reports"],
-          ...(isPortfolioManager ? [["portfolio", "👥", "Portfolio"]] : []),
+          ...(isPortfolioManager && !isPersonal ? [["portfolio", "👥", "Portfolio"]] : []),
         ].map(([tab, icon, label]) => (
           <button key={tab} onClick={() => setActiveTab(tab)} title={label} style={{
             fontFamily: "'Inter', 'Roboto', sans-serif", fontSize: isMobile ? 11 : 14, fontWeight: 500,
@@ -8717,7 +8723,7 @@ export default function WorkHoursTracker({ onImport }) {
       )}
 
       {/* ═══════ PORTFOLIO TAB ═══════ */}
-      {activeTab === "portfolio" && isPortfolioManager && (
+      {activeTab === "portfolio" && isPortfolioManager && !isPersonal && (
         <div>
           <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 16, flexWrap: "wrap" }}>
             <select value={activePortfolioId || ""} onChange={e => { setActivePortfolioId(e.target.value || null); setPortfolioWeekKey(null); }}
@@ -9007,8 +9013,8 @@ export default function WorkHoursTracker({ onImport }) {
                 )}
               </div>
 
-              {/* ── PORTFOLIOS (admin only) ── */}
-              {org && isOrgAdmin && (
+              {/* ── PORTFOLIOS (admin only, work profiles only) ── */}
+              {org && isOrgAdmin && !isPersonal && (
                 <>
                   <div style={{ fontSize: 12, fontWeight: 700, color: "#0891b2", textTransform: "uppercase", letterSpacing: "1.5px", marginBottom: 10, marginTop: 20, padding: "0 4px", display: "flex", alignItems: "center", gap: 8 }}>
                     <div style={{ flex: 1, height: 1, background: "#a5f3fc" }} />
