@@ -2290,10 +2290,10 @@ export default function WorkHoursTracker({ onImport }) {
   }
 
   useEffect(() => {
-    if (loading) return;
+    if (loading || profileSwitching) return;
     const t = setTimeout(() => save(allData, config, standardHours, defaults), 600);
     return () => clearTimeout(t);
-  }, [allData, config, standardHours, defaults, loading, save]);
+  }, [allData, config, standardHours, defaults, loading, profileSwitching, save]);
 
   useEffect(() => {
     if (!userId || userId === "local" || !isPersonal) return;
@@ -2345,7 +2345,10 @@ export default function WorkHoursTracker({ onImport }) {
           const storedId = localStorage.getItem(`wht-v3-active-profile-${userId}`);
           chosen = storedId && list.some(p => p.id === storedId) ? storedId : "default";
         }
-        if (chosen !== activeProfileId) setActiveProfileId(chosen);
+        if (chosen !== activeProfileId) {
+          setProfileSwitching(true);
+          setActiveProfileId(chosen);
+        }
       } catch (err) {
         console.error("Profile probe failed:", err);
         if (!cancelled) setProfilesAvailable(false);
@@ -3398,10 +3401,7 @@ export default function WorkHoursTracker({ onImport }) {
 
   // Save tasks
   useEffect(() => {
-    if (loading) return;
-    // CRITICAL: never auto-save tasks until a successful load has completed.
-    // Without this guard, a transient Supabase load failure would leave tasks=[]
-    // and the save effect would DELETE every task from the database.
+    if (loading || profileSwitching) return;
     if (!tasksLoaded) return;
     const t = setTimeout(() => {
       if (supabaseConfigured && userId !== 'local') {
@@ -3411,7 +3411,7 @@ export default function WorkHoursTracker({ onImport }) {
       }
     }, 600);
     return () => clearTimeout(t);
-  }, [tasks, loading, tasksLoaded, userId, storageAdapter, effectiveProfileId]);
+  }, [tasks, loading, profileSwitching, tasksLoaded, userId, storageAdapter, effectiveProfileId]);
 
   // ── AUTOMATIC BACKUPS ──
   // Snapshots the full state into the `backups` table once per 24h while the
