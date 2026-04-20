@@ -1812,6 +1812,7 @@ export default function WorkHoursTracker({ onImport }) {
   // active profile is personal so the user doesn't land on a blank screen.
   useEffect(() => {
     if (isPersonal && activeTab === "portfolio") setActiveTab("dashboard");
+    if (!isPersonal && activeTab === "habits") setActiveTab("dashboard");
   }, [isPersonal, activeTab]);
 
   const [taskFilter, setTaskFilter] = useState("all"); // all, not_started, in_progress, on_hold
@@ -2288,7 +2289,7 @@ export default function WorkHoursTracker({ onImport }) {
           storageAdapter.get(CONFIG_KEY).catch(() => null),
           storageAdapter.get(SETTINGS_KEY).catch(() => null)
         ]);
-        if (supaData) setAllData(supaData);
+        setAllData(supaData || {});
         setConfig({ ...getDefaultConfig(), ...(cr?.value ? JSON.parse(cr.value) : {}) });
         if (sr?.value) {
           const s = JSON.parse(sr.value);
@@ -2298,7 +2299,7 @@ export default function WorkHoursTracker({ onImport }) {
           setDefaults(getDefaultDefaults());
         }
         const supaTasks = await loadTasks(userId, effectiveProfileId);
-        if (supaTasks) setTasks(supaTasks);
+        setTasks(supaTasks || []);
       } else {
         const [dr, cr, sr] = await Promise.all([
           storageAdapter.get(DATA_KEY).catch(() => null),
@@ -2316,7 +2317,7 @@ export default function WorkHoursTracker({ onImport }) {
         }
         try {
           const tk = await storageAdapter.get(TASKS_KEY).catch(() => null);
-          if (tk?.value) setTasks(JSON.parse(tk.value));
+          setTasks(tk?.value ? JSON.parse(tk.value) : []);
         } catch (e) {}
       }
       setLastSaved(new Date());
@@ -4603,7 +4604,7 @@ export default function WorkHoursTracker({ onImport }) {
       return n;
     }
     return habits
-      .map(h => ({ name: h.name, icon: h.icon, daysActive: daysActive(h.id), streak: currentStreak(h.id) }))
+      .map(h => ({ id: h.id, name: h.name, icon: h.icon, daysActive: daysActive(h.id), streak: currentStreak(h.id) }))
       .sort((a, b) => (b.streak - a.streak) || (b.daysActive - a.daysActive));
   }, [isPersonal, config.habitGroups, config.habitLog]);
 
@@ -9055,6 +9056,7 @@ export default function WorkHoursTracker({ onImport }) {
         const habitGroups = config.habitGroups || [];
         const habitLog = config.habitLog || {};
         const dayLog = habitLog[viewDay] || [];
+        const streakById = Object.fromEntries(personalStreaks.map(s => [s.id, s]));
         const he = habitEditing;
         const shiftDay = (delta) => { const d = new Date(viewDate); d.setDate(d.getDate() + delta); setHabitDay(dateStr(d)); };
         const toggleHabit = (habitId) => {
@@ -9204,6 +9206,11 @@ export default function WorkHoursTracker({ onImport }) {
                           transition: "all 0.2s", flexShrink: 0,
                         }}>{done ? "✓" : ""}</button>
                         <span style={{ flex: 1, fontSize: 14, color: done ? "#80868b" : (darkMode ? "#e0e0e0" : "#202124"), textDecoration: done ? "line-through" : "none", transition: "all 0.2s" }}>{habit.name}</span>
+                        {streakById[habit.id]?.streak > 0 && (
+                          <span title={`${streakById[habit.id].daysActive}/30 days`} style={{ fontSize: 12, fontWeight: 700, color: "#137333", flexShrink: 0, whiteSpace: "nowrap" }}>
+                            🔥 {streakById[habit.id].streak}
+                          </span>
+                        )}
                         <div style={{ display: "flex", gap: 2, opacity: 0.5 }}>
                           {hIdx > 0 && <button onClick={() => moveHabit(group.id, hIdx, -1)} style={{ background: "transparent", border: "none", cursor: "pointer", fontSize: 10, color: "#5f6368", padding: "2px 4px" }}>▲</button>}
                           {hIdx < group.habits.length - 1 && <button onClick={() => moveHabit(group.id, hIdx, 1)} style={{ background: "transparent", border: "none", cursor: "pointer", fontSize: 10, color: "#5f6368", padding: "2px 4px" }}>▼</button>}
