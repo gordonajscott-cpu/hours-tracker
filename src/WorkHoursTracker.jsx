@@ -1949,6 +1949,15 @@ export default function WorkHoursTracker({ onImport }) {
   const [reportView, setReportView] = useState("weekly");
   const [reportDate, setReportDate] = useState(new Date(now.getFullYear(), now.getMonth(), now.getDate()));
   const [reportWeek, setReportWeek] = useState(getWeekNumber(now));
+
+  // Personal profiles don't show the Batch timesheet or Bill Rate
+  // group/filter — bounce off any of those if a switch lands us there.
+  useEffect(() => {
+    if (!isPersonal) return;
+    if (reportView === "batch") setReportView("weekly");
+    if (reportGroup === "billRate") setReportGroup("none");
+    if (reportFilterField === "billRate") { setReportFilterField("none"); setReportFilterValues([]); }
+  }, [isPersonal, reportView, reportGroup, reportFilterField]);
   const [reportWeekYear, setReportWeekYear] = useState(now.getFullYear());
   const [reportAnnualYear, setReportAnnualYear] = useState(now.getFullYear());
 
@@ -4559,6 +4568,47 @@ export default function WorkHoursTracker({ onImport }) {
     const total = good + bad + neutral;
     return { good, bad, neutral, total };
   }, [allData, config.tagCategories, reportView, reportDate, reportWeek, reportWeekYear, reportMonth, reportYear, reportAnnualYear, reportFilterField, reportFilterValues]);
+
+  // Personal-profile habit streaks: for each activity, how many of the last
+  // 30 days saw at least one entry with it, and the current unbroken streak
+  // (consecutive days ending today). Non-personal profiles skip this work.
+  const personalStreaks = useMemo(() => {
+    if (!isPersonal) return [];
+    const today = new Date(); today.setHours(0, 0, 0, 0);
+    const windowDays = 30;
+    function dayKey(d) {
+      return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+    }
+    function entriesForDate(d) {
+      const wn = getWeekNumber(d);
+      const yr = d.getMonth() === 0 && wn > 50 ? d.getFullYear() - 1
+        : d.getMonth() === 11 && wn < 5 ? d.getFullYear() + 1
+        : d.getFullYear();
+      const wk = allData[`${yr}-W${wn}`];
+      if (!wk) return [];
+      return wk[(d.getDay() + 6) % 7] || [];
+    }
+    const byActivity = {};
+    for (let i = 0; i < windowDays; i++) {
+      const d = new Date(today); d.setDate(d.getDate() - i);
+      const k = dayKey(d);
+      for (const ent of entriesForDate(d)) {
+        const a = ent.activity;
+        if (!a) continue;
+        if (!byActivity[a]) byActivity[a] = new Set();
+        byActivity[a].add(k);
+      }
+    }
+    function currentStreak(daysSet) {
+      let n = 0;
+      const d = new Date(today);
+      while (daysSet.has(dayKey(d))) { n++; d.setDate(d.getDate() - 1); }
+      return n;
+    }
+    return Object.entries(byActivity)
+      .map(([name, days]) => ({ name, daysActive: days.size, streak: currentStreak(days) }))
+      .sort((a, b) => (b.streak - a.streak) || (b.daysActive - a.daysActive));
+  }, [isPersonal, allData]);
 
   // Weekly report data
   const weeklyReportData = useMemo(() => {
@@ -8416,6 +8466,39 @@ export default function WorkHoursTracker({ onImport }) {
           )}
 
           {/* ════════════════════════════════════════ */}
+          {/* HABIT STREAKS — personal profiles only   */}
+          {/* ════════════════════════════════════════ */}
+          {isPersonal && personalStreaks.length > 0 && (
+            <div style={{
+              padding: "14px 18px", marginBottom: 18,
+              background: "#ffffff", border: "1px solid #e8eaed", borderRadius: 10
+            }}>
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
+                <div style={{ fontSize: 12, fontWeight: 600, color: "#5f6368", textTransform: "uppercase", letterSpacing: "0.5px" }}>Habit Streaks</div>
+                <div style={{ fontSize: 11, color: "#80868b" }}>last 30 days</div>
+              </div>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                {personalStreaks.slice(0, 8).map(s => (
+                  <div key={s.name} style={{
+                    display: "flex", alignItems: "center", gap: 10,
+                    padding: "8px 12px", borderRadius: 8,
+                    background: s.streak > 0 ? "#e6f4ea" : "#f8f9fa",
+                    border: `1px solid ${s.streak > 0 ? "#a5d6a7" : "#e8eaed"}`
+                  }}>
+                    <div style={{ fontSize: 13, fontWeight: 600, color: "#202124" }}>{s.name}</div>
+                    <div style={{ display: "flex", alignItems: "center", gap: 3 }}>
+                      <span style={{ fontSize: 13 }}>🔥</span>
+                      <span style={{ fontSize: 13, fontWeight: 700, color: s.streak > 0 ? "#137333" : "#80868b" }}>{s.streak}</span>
+                      <span style={{ fontSize: 11, color: "#5f6368" }}>day{s.streak === 1 ? "" : "s"}</span>
+                    </div>
+                    <div style={{ fontSize: 11, color: "#5f6368" }}>· {s.daysActive}/30 active</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* ════════════════════════════════════════ */}
           {/* GROUPED VIEW — when a group-by is active */}
           {/* ════════════════════════════════════════ */}
           {reportGroup !== "none" && (() => {
@@ -8586,20 +8669,27 @@ export default function WorkHoursTracker({ onImport }) {
                         </div>
                       ))}
                     </div>
-                    <div className="wht-grid-3col" style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12 }}>
+                    {isPersonal ? (
                       <div style={{ background: "#ffffff", border: "1px solid #dadce0", borderRadius: 12, padding: "16px 20px", textAlign: "center", boxShadow: "0 1px 3px rgba(0,0,0,0.08)" }}>
-                        <div style={{ fontSize: 13, color: "#5f6368", textTransform: "uppercase", letterSpacing: "1px", marginBottom: 6 }}>Total</div>
+                        <div style={{ fontSize: 13, color: "#5f6368", textTransform: "uppercase", letterSpacing: "1px", marginBottom: 6 }}>Week Total</div>
                         <div style={{ fontSize: 28, fontWeight: 700, fontFamily: "'Inter', 'Roboto', sans-serif" }}>{fmtH(total)}</div>
                       </div>
-                      <div style={{ background: "#ffffff", border: "1px solid #dadce0", borderRadius: 12, padding: "16px 20px", textAlign: "center", boxShadow: "0 1px 3px rgba(0,0,0,0.08)" }}>
-                        <div style={{ fontSize: 13, color: "#5f6368", textTransform: "uppercase", letterSpacing: "1px", marginBottom: 6 }}>Contracted</div>
-                        <div style={{ fontSize: 28, fontWeight: 700, fontFamily: "'Inter', 'Roboto', sans-serif", color: "#5f6368" }}>{fmtH(stdHrs)}</div>
+                    ) : (
+                      <div className="wht-grid-3col" style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12 }}>
+                        <div style={{ background: "#ffffff", border: "1px solid #dadce0", borderRadius: 12, padding: "16px 20px", textAlign: "center", boxShadow: "0 1px 3px rgba(0,0,0,0.08)" }}>
+                          <div style={{ fontSize: 13, color: "#5f6368", textTransform: "uppercase", letterSpacing: "1px", marginBottom: 6 }}>Total</div>
+                          <div style={{ fontSize: 28, fontWeight: 700, fontFamily: "'Inter', 'Roboto', sans-serif" }}>{fmtH(total)}</div>
+                        </div>
+                        <div style={{ background: "#ffffff", border: "1px solid #dadce0", borderRadius: 12, padding: "16px 20px", textAlign: "center", boxShadow: "0 1px 3px rgba(0,0,0,0.08)" }}>
+                          <div style={{ fontSize: 13, color: "#5f6368", textTransform: "uppercase", letterSpacing: "1px", marginBottom: 6 }}>Contracted</div>
+                          <div style={{ fontSize: 28, fontWeight: 700, fontFamily: "'Inter', 'Roboto', sans-serif", color: "#5f6368" }}>{fmtH(stdHrs)}</div>
+                        </div>
+                        <div style={{ background: overtime > 0 ? "#e8f0fe" : "#ffffff", border: `1px solid ${overtime > 0 ? "#1a73e8" : "#dadce0"}`, borderRadius: 12, padding: "16px 20px", textAlign: "center", boxShadow: "0 1px 3px rgba(0,0,0,0.08)" }}>
+                          <div style={{ fontSize: 13, color: "#5f6368", textTransform: "uppercase", letterSpacing: "1px", marginBottom: 6 }}>Overtime</div>
+                          <div style={{ fontSize: 28, fontWeight: 700, fontFamily: "'Inter', 'Roboto', sans-serif", color: overtime > 0 ? "#1a73e8" : "#5f6368" }}>{total > 0 ? fmtH(overtime) : "—"}</div>
+                        </div>
                       </div>
-                      <div style={{ background: overtime > 0 ? "#e8f0fe" : "#ffffff", border: `1px solid ${overtime > 0 ? "#1a73e8" : "#dadce0"}`, borderRadius: 12, padding: "16px 20px", textAlign: "center", boxShadow: "0 1px 3px rgba(0,0,0,0.08)" }}>
-                        <div style={{ fontSize: 13, color: "#5f6368", textTransform: "uppercase", letterSpacing: "1px", marginBottom: 6 }}>Overtime</div>
-                        <div style={{ fontSize: 28, fontWeight: 700, fontFamily: "'Inter', 'Roboto', sans-serif", color: overtime > 0 ? "#1a73e8" : "#5f6368" }}>{total > 0 ? fmtH(overtime) : "—"}</div>
-                      </div>
-                    </div>
+                    )}
                   </div>
                 );
               })()}
@@ -8628,34 +8718,43 @@ export default function WorkHoursTracker({ onImport }) {
                         </div>
                       ))}
                     </div>
-                    <div className="wht-grid-3col" style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12 }}>
+                    {isPersonal ? (
                       <div style={{ background: "#ffffff", border: "1px solid #dadce0", borderRadius: 12, padding: "16px 20px", textAlign: "center", boxShadow: "0 1px 3px rgba(0,0,0,0.08)" }}>
-                        <div style={{ fontSize: 13, color: "#5f6368", textTransform: "uppercase", letterSpacing: "1px", marginBottom: 6 }}>Total</div>
+                        <div style={{ fontSize: 13, color: "#5f6368", textTransform: "uppercase", letterSpacing: "1px", marginBottom: 6 }}>Month Total</div>
                         <div style={{ fontSize: 28, fontWeight: 700, fontFamily: "'Inter', 'Roboto', sans-serif" }}>{fmtH(totalHours)}</div>
                       </div>
-                      <div style={{ background: "#ffffff", border: "1px solid #dadce0", borderRadius: 12, padding: "16px 20px", textAlign: "center", boxShadow: "0 1px 3px rgba(0,0,0,0.08)" }}>
-                        <div style={{ fontSize: 13, color: "#5f6368", textTransform: "uppercase", letterSpacing: "1px", marginBottom: 6 }}>Contracted</div>
-                        <div style={{ fontSize: 28, fontWeight: 700, fontFamily: "'Inter', 'Roboto', sans-serif", color: "#5f6368" }}>{fmtH(contracted)}</div>
-                      </div>
-                      <div style={{ background: overtime > 0 ? "#e8f0fe" : "#ffffff", border: `1px solid ${overtime > 0 ? "#1a73e8" : "#dadce0"}`, borderRadius: 12, padding: "16px 20px", textAlign: "center", boxShadow: "0 1px 3px rgba(0,0,0,0.08)" }}>
-                        <div style={{ fontSize: 13, color: "#5f6368", textTransform: "uppercase", letterSpacing: "1px", marginBottom: 6 }}>Overtime</div>
-                        <div style={{ fontSize: 28, fontWeight: 700, fontFamily: "'Inter', 'Roboto', sans-serif", color: overtime > 0 ? "#1a73e8" : "#5f6368" }}>{totalHours > 0 ? fmtH(overtime) : "—"}</div>
-                      </div>
-                    </div>
-                    <div style={{ padding: "16px 20px", background: "#ffffff", border: "1px solid #dadce0", borderRadius: 10, marginTop: 14 }}>
-                      <div style={{ display: "flex", justifyContent: "space-between", fontSize: 14, color: "#5f6368", marginBottom: 10 }}>
-                        <span>Progress</span>
-                        <span>{contracted > 0 ? Math.round((totalHours / contracted) * 100) : 0}%</span>
-                      </div>
-                      <div style={{ height: 10, background: "#dadce0", borderRadius: 5, overflow: "hidden" }}>
-                        <div style={{
-                          height: "100%", borderRadius: 5,
-                          width: `${Math.min(100, contracted > 0 ? (totalHours / contracted) * 100 : 0)}%`,
-                          background: overtime > 0 ? "linear-gradient(90deg, #1a73e8, #d93025)" : "linear-gradient(90deg, #1a73e8, #4285f4)",
-                          transition: "width 0.5s ease"
-                        }} />
-                      </div>
-                    </div>
+                    ) : (
+                      <>
+                        <div className="wht-grid-3col" style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12 }}>
+                          <div style={{ background: "#ffffff", border: "1px solid #dadce0", borderRadius: 12, padding: "16px 20px", textAlign: "center", boxShadow: "0 1px 3px rgba(0,0,0,0.08)" }}>
+                            <div style={{ fontSize: 13, color: "#5f6368", textTransform: "uppercase", letterSpacing: "1px", marginBottom: 6 }}>Total</div>
+                            <div style={{ fontSize: 28, fontWeight: 700, fontFamily: "'Inter', 'Roboto', sans-serif" }}>{fmtH(totalHours)}</div>
+                          </div>
+                          <div style={{ background: "#ffffff", border: "1px solid #dadce0", borderRadius: 12, padding: "16px 20px", textAlign: "center", boxShadow: "0 1px 3px rgba(0,0,0,0.08)" }}>
+                            <div style={{ fontSize: 13, color: "#5f6368", textTransform: "uppercase", letterSpacing: "1px", marginBottom: 6 }}>Contracted</div>
+                            <div style={{ fontSize: 28, fontWeight: 700, fontFamily: "'Inter', 'Roboto', sans-serif", color: "#5f6368" }}>{fmtH(contracted)}</div>
+                          </div>
+                          <div style={{ background: overtime > 0 ? "#e8f0fe" : "#ffffff", border: `1px solid ${overtime > 0 ? "#1a73e8" : "#dadce0"}`, borderRadius: 12, padding: "16px 20px", textAlign: "center", boxShadow: "0 1px 3px rgba(0,0,0,0.08)" }}>
+                            <div style={{ fontSize: 13, color: "#5f6368", textTransform: "uppercase", letterSpacing: "1px", marginBottom: 6 }}>Overtime</div>
+                            <div style={{ fontSize: 28, fontWeight: 700, fontFamily: "'Inter', 'Roboto', sans-serif", color: overtime > 0 ? "#1a73e8" : "#5f6368" }}>{totalHours > 0 ? fmtH(overtime) : "—"}</div>
+                          </div>
+                        </div>
+                        <div style={{ padding: "16px 20px", background: "#ffffff", border: "1px solid #dadce0", borderRadius: 10, marginTop: 14 }}>
+                          <div style={{ display: "flex", justifyContent: "space-between", fontSize: 14, color: "#5f6368", marginBottom: 10 }}>
+                            <span>Progress</span>
+                            <span>{contracted > 0 ? Math.round((totalHours / contracted) * 100) : 0}%</span>
+                          </div>
+                          <div style={{ height: 10, background: "#dadce0", borderRadius: 5, overflow: "hidden" }}>
+                            <div style={{
+                              height: "100%", borderRadius: 5,
+                              width: `${Math.min(100, contracted > 0 ? (totalHours / contracted) * 100 : 0)}%`,
+                              background: overtime > 0 ? "linear-gradient(90deg, #1a73e8, #d93025)" : "linear-gradient(90deg, #1a73e8, #4285f4)",
+                              transition: "width 0.5s ease"
+                            }} />
+                          </div>
+                        </div>
+                      </>
+                    )}
                   </div>
                 );
               })()}
@@ -8686,20 +8785,27 @@ export default function WorkHoursTracker({ onImport }) {
                         </div>
                       ))}
                     </div>
-                    <div className="wht-grid-3col" style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12 }}>
+                    {isPersonal ? (
                       <div style={{ background: "#ffffff", border: "1px solid #dadce0", borderRadius: 12, padding: "18px 22px", textAlign: "center", boxShadow: "0 1px 3px rgba(0,0,0,0.08)" }}>
                         <div style={{ fontSize: 13, color: "#5f6368", textTransform: "uppercase", letterSpacing: "1px", marginBottom: 8 }}>Year Total</div>
                         <div style={{ fontSize: 30, fontWeight: 700, fontFamily: "'Inter', 'Roboto', sans-serif" }}>{fmtH(totalHours)}</div>
                       </div>
-                      <div style={{ background: "#ffffff", border: "1px solid #dadce0", borderRadius: 12, padding: "18px 22px", textAlign: "center", boxShadow: "0 1px 3px rgba(0,0,0,0.08)" }}>
-                        <div style={{ fontSize: 13, color: "#5f6368", textTransform: "uppercase", letterSpacing: "1px", marginBottom: 8 }}>Contracted</div>
-                        <div style={{ fontSize: 30, fontWeight: 700, fontFamily: "'Inter', 'Roboto', sans-serif", color: "#5f6368" }}>{fmtH(contracted)}</div>
+                    ) : (
+                      <div className="wht-grid-3col" style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12 }}>
+                        <div style={{ background: "#ffffff", border: "1px solid #dadce0", borderRadius: 12, padding: "18px 22px", textAlign: "center", boxShadow: "0 1px 3px rgba(0,0,0,0.08)" }}>
+                          <div style={{ fontSize: 13, color: "#5f6368", textTransform: "uppercase", letterSpacing: "1px", marginBottom: 8 }}>Year Total</div>
+                          <div style={{ fontSize: 30, fontWeight: 700, fontFamily: "'Inter', 'Roboto', sans-serif" }}>{fmtH(totalHours)}</div>
+                        </div>
+                        <div style={{ background: "#ffffff", border: "1px solid #dadce0", borderRadius: 12, padding: "18px 22px", textAlign: "center", boxShadow: "0 1px 3px rgba(0,0,0,0.08)" }}>
+                          <div style={{ fontSize: 13, color: "#5f6368", textTransform: "uppercase", letterSpacing: "1px", marginBottom: 8 }}>Contracted</div>
+                          <div style={{ fontSize: 30, fontWeight: 700, fontFamily: "'Inter', 'Roboto', sans-serif", color: "#5f6368" }}>{fmtH(contracted)}</div>
+                        </div>
+                        <div style={{ background: overtime > 0 ? "#e8f0fe" : "#ffffff", border: `1px solid ${overtime > 0 ? "#1a73e8" : "#dadce0"}`, borderRadius: 12, padding: "18px 22px", textAlign: "center", boxShadow: "0 1px 3px rgba(0,0,0,0.08)" }}>
+                          <div style={{ fontSize: 13, color: "#5f6368", textTransform: "uppercase", letterSpacing: "1px", marginBottom: 8 }}>Overtime</div>
+                          <div style={{ fontSize: 30, fontWeight: 700, fontFamily: "'Inter', 'Roboto', sans-serif", color: overtime > 0 ? "#1a73e8" : "#5f6368" }}>{totalHours > 0 ? fmtH(overtime) : "—"}</div>
+                        </div>
                       </div>
-                      <div style={{ background: overtime > 0 ? "#e8f0fe" : "#ffffff", border: `1px solid ${overtime > 0 ? "#1a73e8" : "#dadce0"}`, borderRadius: 12, padding: "18px 22px", textAlign: "center", boxShadow: "0 1px 3px rgba(0,0,0,0.08)" }}>
-                        <div style={{ fontSize: 13, color: "#5f6368", textTransform: "uppercase", letterSpacing: "1px", marginBottom: 8 }}>Overtime</div>
-                        <div style={{ fontSize: 30, fontWeight: 700, fontFamily: "'Inter', 'Roboto', sans-serif", color: overtime > 0 ? "#1a73e8" : "#5f6368" }}>{totalHours > 0 ? fmtH(overtime) : "—"}</div>
-                      </div>
-                    </div>
+                    )}
                   </div>
                 );
               })()}
