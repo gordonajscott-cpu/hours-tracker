@@ -4569,46 +4569,43 @@ export default function WorkHoursTracker({ onImport }) {
     return { good, bad, neutral, total };
   }, [allData, config.tagCategories, reportView, reportDate, reportWeek, reportWeekYear, reportMonth, reportYear, reportAnnualYear, reportFilterField, reportFilterValues]);
 
-  // Personal-profile habit streaks: for each activity, how many of the last
-  // 30 days saw at least one entry with it, and the current unbroken streak
-  // (consecutive days ending today). Non-personal profiles skip this work.
+  // Personal-profile habit streaks: surfaces the Habits tab's tracked
+  // habits in Reports so the user can see current streaks and 30-day
+  // consistency alongside their other summaries. Non-personal profiles
+  // skip this work entirely.
   const personalStreaks = useMemo(() => {
     if (!isPersonal) return [];
+    const habitLog = config.habitLog || {};
+    const groups = config.habitGroups || [];
+    const habits = groups.flatMap(g => (g.habits || []).map(h => ({ id: h.id, name: h.name, icon: g.icon || "" })));
+    if (habits.length === 0) return [];
     const today = new Date(); today.setHours(0, 0, 0, 0);
     const windowDays = 30;
     function dayKey(d) {
       return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
     }
-    function entriesForDate(d) {
-      const wn = getWeekNumber(d);
-      const yr = d.getMonth() === 0 && wn > 50 ? d.getFullYear() - 1
-        : d.getMonth() === 11 && wn < 5 ? d.getFullYear() + 1
-        : d.getFullYear();
-      const wk = allData[`${yr}-W${wn}`];
-      if (!wk) return [];
-      return wk[(d.getDay() + 6) % 7] || [];
-    }
-    const byActivity = {};
-    for (let i = 0; i < windowDays; i++) {
-      const d = new Date(today); d.setDate(d.getDate() - i);
-      const k = dayKey(d);
-      for (const ent of entriesForDate(d)) {
-        const a = ent.activity;
-        if (!a) continue;
-        if (!byActivity[a]) byActivity[a] = new Set();
-        byActivity[a].add(k);
+    function daysActive(id) {
+      let count = 0;
+      for (let i = 0; i < windowDays; i++) {
+        const d = new Date(today); d.setDate(d.getDate() - i);
+        const log = habitLog[dayKey(d)];
+        if (log && log.includes(id)) count++;
       }
+      return count;
     }
-    function currentStreak(daysSet) {
+    function currentStreak(id) {
       let n = 0;
       const d = new Date(today);
-      while (daysSet.has(dayKey(d))) { n++; d.setDate(d.getDate() - 1); }
+      // Allow an unchecked "today" without breaking the streak: start the
+      // walk from yesterday if today isn't marked but yesterday is.
+      if (!(habitLog[dayKey(d)] || []).includes(id)) d.setDate(d.getDate() - 1);
+      while ((habitLog[dayKey(d)] || []).includes(id)) { n++; d.setDate(d.getDate() - 1); }
       return n;
     }
-    return Object.entries(byActivity)
-      .map(([name, days]) => ({ name, daysActive: days.size, streak: currentStreak(days) }))
+    return habits
+      .map(h => ({ name: h.name, icon: h.icon, daysActive: daysActive(h.id), streak: currentStreak(h.id) }))
       .sort((a, b) => (b.streak - a.streak) || (b.daysActive - a.daysActive));
-  }, [isPersonal, allData]);
+  }, [isPersonal, config.habitGroups, config.habitLog]);
 
   // Weekly report data
   const weeklyReportData = useMemo(() => {
@@ -8478,20 +8475,21 @@ export default function WorkHoursTracker({ onImport }) {
                 <div style={{ fontSize: 11, color: "#80868b" }}>last 30 days</div>
               </div>
               <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-                {personalStreaks.slice(0, 8).map(s => (
-                  <div key={s.name} style={{
+                {personalStreaks.map((s, i) => (
+                  <div key={s.name + i} style={{
                     display: "flex", alignItems: "center", gap: 10,
                     padding: "8px 12px", borderRadius: 8,
                     background: s.streak > 0 ? "#e6f4ea" : "#f8f9fa",
                     border: `1px solid ${s.streak > 0 ? "#a5d6a7" : "#e8eaed"}`
                   }}>
+                    {s.icon && <span style={{ fontSize: 14 }}>{s.icon}</span>}
                     <div style={{ fontSize: 13, fontWeight: 600, color: "#202124" }}>{s.name}</div>
                     <div style={{ display: "flex", alignItems: "center", gap: 3 }}>
                       <span style={{ fontSize: 13 }}>🔥</span>
                       <span style={{ fontSize: 13, fontWeight: 700, color: s.streak > 0 ? "#137333" : "#80868b" }}>{s.streak}</span>
                       <span style={{ fontSize: 11, color: "#5f6368" }}>day{s.streak === 1 ? "" : "s"}</span>
                     </div>
-                    <div style={{ fontSize: 11, color: "#5f6368" }}>· {s.daysActive}/30 active</div>
+                    <div style={{ fontSize: 11, color: "#5f6368" }}>· {s.daysActive}/30</div>
                   </div>
                 ))}
               </div>
