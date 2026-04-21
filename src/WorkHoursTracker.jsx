@@ -1707,10 +1707,181 @@ function NoteAutoComplete({ value, onChange, onSelectEntry, onEnter, noteHistory
   );
 }
 
+// Card view for a risk or issue in the PM tab — read-only summary with an edit button.
+function PmItemCard({ item, isRisks, projects, onEdit, computeSeverity, sevColor, sevBg, statusColor, darkMode }) {
+  const severity = isRisks ? computeSeverity(item.likelihood, item.impact) : item.priority;
+  const project = projects.find(p => (typeof p === "string" ? p : p.name) === item.project);
+  const projectName = typeof project === "string" ? project : project?.name;
+  return (
+    <div onClick={onEdit} style={{
+      background: darkMode ? "#1a1a2e" : "#fff",
+      border: `1px solid ${darkMode ? "#2a2a4a" : "#e8eaed"}`,
+      borderLeft: `4px solid ${sevColor(severity)}`,
+      borderRadius: 12, padding: "14px 18px", marginBottom: 10,
+      cursor: "pointer", boxShadow: "0 1px 3px rgba(0,0,0,0.06)",
+    }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, marginBottom: 6, flexWrap: "wrap" }}>
+        <div style={{ fontSize: 15, fontWeight: 600, color: darkMode ? "#e0e0e0" : "#202124", flex: 1, minWidth: 0 }}>
+          {item.title || <span style={{ color: "#80868b", fontStyle: "italic" }}>Untitled</span>}
+        </div>
+        <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
+          <span style={{ fontSize: 11, fontWeight: 700, background: sevBg(severity), color: sevColor(severity), padding: "3px 10px", borderRadius: 10, textTransform: "uppercase", letterSpacing: "0.3px" }}>{severity}</span>
+          <span style={{ fontSize: 11, fontWeight: 600, color: "#fff", background: statusColor(item.status), padding: "3px 10px", borderRadius: 10 }}>{item.status}</span>
+        </div>
+      </div>
+      {item.description && (
+        <div style={{ fontSize: 13, color: darkMode ? "#a0a0b0" : "#5f6368", marginBottom: 6, whiteSpace: "pre-wrap" }}>{item.description}</div>
+      )}
+      <div style={{ display: "flex", gap: 14, flexWrap: "wrap", fontSize: 12, color: "#80868b" }}>
+        {isRisks ? (
+          <>
+            <span>Likelihood: <strong style={{ color: darkMode ? "#e0e0e0" : "#202124" }}>{item.likelihood}</strong></span>
+            <span>Impact: <strong style={{ color: darkMode ? "#e0e0e0" : "#202124" }}>{item.impact}</strong></span>
+          </>
+        ) : (
+          <span>Impact: <strong style={{ color: darkMode ? "#e0e0e0" : "#202124" }}>{item.impact}</strong></span>
+        )}
+        {item.owner && <span>Owner: <strong style={{ color: darkMode ? "#e0e0e0" : "#202124" }}>{item.owner}</strong></span>}
+        {projectName && <span>Project: <strong style={{ color: darkMode ? "#e0e0e0" : "#202124" }}>{projectName}</strong></span>}
+        {item.dateRaised && <span>Raised: <strong style={{ color: darkMode ? "#e0e0e0" : "#202124" }}>{item.dateRaised}</strong></span>}
+        {isRisks && item.reviewDate && <span>Review: <strong style={{ color: darkMode ? "#e0e0e0" : "#202124" }}>{item.reviewDate}</strong></span>}
+        {!isRisks && item.dateResolved && <span>Resolved: <strong style={{ color: darkMode ? "#e0e0e0" : "#202124" }}>{item.dateResolved}</strong></span>}
+      </div>
+    </div>
+  );
+}
+
+// Editor for a single risk/issue; keeps local draft state so typing doesn't trigger
+// a config save on every keystroke.
+function PmItemEditor({ item, isRisks, projects, onSave, onCancel, onDelete, computeSeverity, sevColor, sevBg, darkMode, inputStyle, labelStyle, isNew }) {
+  const [draft, setDraft] = useState(item);
+  const severity = isRisks ? computeSeverity(draft.likelihood, draft.impact) : draft.priority;
+  const set = (k, v) => setDraft(prev => ({ ...prev, [k]: v }));
+  const projectOptions = projects.map(p => typeof p === "string" ? p : p.name).filter(Boolean);
+  const riskStatuses = ["Open", "Monitoring", "Closed"];
+  const issueStatuses = ["Open", "In Progress", "Resolved", "Closed"];
+  const levels = ["Low", "Med", "High"];
+  const priorities = ["Low", "Med", "High", "Critical"];
+  const field = (label, node) => (
+    <div style={{ marginBottom: 10 }}>
+      <label style={labelStyle}>{label}</label>
+      {node}
+    </div>
+  );
+
+  return (
+    <div style={{
+      background: darkMode ? "#1a1a2e" : "#fff",
+      border: "2px solid #1a73e8",
+      borderLeft: `4px solid ${sevColor(severity)}`,
+      borderRadius: 12, padding: "16px 20px", marginBottom: 12,
+    }}>
+      {field("Title", (
+        <input autoFocus value={draft.title} onChange={e => set("title", e.target.value)} placeholder="Short, specific title" style={inputStyle} />
+      ))}
+      {field("Description", (
+        <textarea value={draft.description} onChange={e => set("description", e.target.value)} placeholder={isRisks ? "What could go wrong, and why it matters" : "What's happening, and why it matters"} rows={3} style={{ ...inputStyle, resize: "vertical", minHeight: 60 }} />
+      ))}
+
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: 10, marginBottom: 10 }}>
+        {isRisks && (
+          <>
+            <div>
+              <label style={labelStyle}>Likelihood</label>
+              <select value={draft.likelihood} onChange={e => set("likelihood", e.target.value)} style={inputStyle}>
+                {levels.map(l => <option key={l} value={l}>{l}</option>)}
+              </select>
+            </div>
+            <div>
+              <label style={labelStyle}>Impact</label>
+              <select value={draft.impact} onChange={e => set("impact", e.target.value)} style={inputStyle}>
+                {levels.map(l => <option key={l} value={l}>{l}</option>)}
+              </select>
+            </div>
+            <div>
+              <label style={labelStyle}>Severity</label>
+              <div style={{ padding: "6px 10px", borderRadius: 6, background: sevBg(severity), color: sevColor(severity), fontSize: 13, fontWeight: 700, textAlign: "center" }}>{severity}</div>
+            </div>
+          </>
+        )}
+        {!isRisks && (
+          <>
+            <div>
+              <label style={labelStyle}>Priority</label>
+              <select value={draft.priority} onChange={e => set("priority", e.target.value)} style={inputStyle}>
+                {priorities.map(l => <option key={l} value={l}>{l}</option>)}
+              </select>
+            </div>
+            <div>
+              <label style={labelStyle}>Impact</label>
+              <select value={draft.impact} onChange={e => set("impact", e.target.value)} style={inputStyle}>
+                {levels.map(l => <option key={l} value={l}>{l}</option>)}
+              </select>
+            </div>
+          </>
+        )}
+        <div>
+          <label style={labelStyle}>Status</label>
+          <select value={draft.status} onChange={e => set("status", e.target.value)} style={inputStyle}>
+            {(isRisks ? riskStatuses : issueStatuses).map(s => <option key={s} value={s}>{s}</option>)}
+          </select>
+        </div>
+      </div>
+
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: 10, marginBottom: 10 }}>
+        <div>
+          <label style={labelStyle}>Owner</label>
+          <input value={draft.owner} onChange={e => set("owner", e.target.value)} placeholder="Who owns this?" style={inputStyle} />
+        </div>
+        <div>
+          <label style={labelStyle}>Project</label>
+          <select value={draft.project} onChange={e => set("project", e.target.value)} style={inputStyle}>
+            <option value="">(none)</option>
+            {projectOptions.map(p => <option key={p} value={p}>{p}</option>)}
+          </select>
+        </div>
+        <div>
+          <label style={labelStyle}>Date raised</label>
+          <input type="date" value={draft.dateRaised || ""} onChange={e => set("dateRaised", e.target.value)} style={inputStyle} />
+        </div>
+        {isRisks ? (
+          <div>
+            <label style={labelStyle}>Review date</label>
+            <input type="date" value={draft.reviewDate || ""} onChange={e => set("reviewDate", e.target.value)} style={inputStyle} />
+          </div>
+        ) : (
+          <div>
+            <label style={labelStyle}>Date resolved</label>
+            <input type="date" value={draft.dateResolved || ""} onChange={e => set("dateResolved", e.target.value)} style={inputStyle} />
+          </div>
+        )}
+      </div>
+
+      {field(isRisks ? "Mitigation" : "Resolution", (
+        <textarea value={isRisks ? draft.mitigation : draft.resolution} onChange={e => set(isRisks ? "mitigation" : "resolution", e.target.value)} placeholder={isRisks ? "What are we doing to reduce this risk?" : "What's being done to resolve this?"} rows={2} style={{ ...inputStyle, resize: "vertical", minHeight: 48 }} />
+      ))}
+
+      <div style={{ display: "flex", justifyContent: "space-between", gap: 8, marginTop: 4 }}>
+        <button onClick={onDelete} style={{ background: "transparent", border: "1px solid #d93025", color: "#d93025", padding: "8px 16px", borderRadius: 8, cursor: "pointer", fontSize: 13, fontWeight: 600 }}>
+          Delete
+        </button>
+        <div style={{ display: "flex", gap: 8 }}>
+          <button onClick={() => { if (isNew) onDelete(); else onCancel(); }} style={{ background: "transparent", border: "1px solid #dadce0", color: "#5f6368", padding: "8px 16px", borderRadius: 8, cursor: "pointer", fontSize: 13, fontWeight: 600 }}>
+            Cancel
+          </button>
+          <button onClick={() => onSave(draft)} style={{ background: "#1a73e8", border: "none", color: "#fff", padding: "8px 20px", borderRadius: 8, cursor: "pointer", fontSize: 13, fontWeight: 700 }}>
+            Save
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // Baseline shapes used when (re)loading a profile — ensures switching profiles
 // can't leak the previous profile's config through a partial merge.
 function getDefaultConfig() {
-  return { customers: [], projects: [], workOrders: [], activities: [], tags: [], activityTemplates: [], favouriteActivities: [], roles: [], favouriteRoles: [], favouriteTags: [], billRates: [], favouriteBillRates: [], tagCategories: {}, bankHolidayRegion: "", customHolidays: {}, showDailyQuote: true, taskTemplates: [] };
+  return { customers: [], projects: [], workOrders: [], activities: [], tags: [], activityTemplates: [], favouriteActivities: [], roles: [], favouriteRoles: [], favouriteTags: [], billRates: [], favouriteBillRates: [], tagCategories: {}, bankHolidayRegion: "", customHolidays: {}, showDailyQuote: true, taskTemplates: [], risks: [], issues: [] };
 }
 function getDefaultDefaults() {
   return { customer: "", project: "", workOrder: "", activity: "", role: "", billRate: "", startTime: "09:00", endTime: "17:30", wakeTime: "07:00", workStartTime: "09:00", lunchStartTime: "12:00", lunchEndTime: "13:00", workEndTime: "17:30", bedTime: "22:30", workDays: [0, 1, 2, 3, 4] };
@@ -1812,6 +1983,7 @@ export default function WorkHoursTracker({ onImport }) {
   // active profile is personal so the user doesn't land on a blank screen.
   useEffect(() => {
     if (isPersonal && activeTab === "portfolio") setActiveTab("dashboard");
+    if (isPersonal && activeTab === "pm") setActiveTab("dashboard");
     if (!isPersonal && activeTab === "habits") setActiveTab("dashboard");
   }, [isPersonal, activeTab]);
 
@@ -1825,6 +1997,10 @@ export default function WorkHoursTracker({ onImport }) {
   const [taskView, setTaskView] = useState("list"); // "list" or "myday"
   const [habitEditing, setHabitEditing] = useState(null);
   const [habitDay, setHabitDay] = useState(() => dateStr(new Date()));
+  const [pmView, setPmView] = useState("risks"); // "risks" | "issues"
+  const [pmEditingId, setPmEditingId] = useState(null); // id of risk/issue being edited
+  const [pmDraftNew, setPmDraftNew] = useState(null); // in-progress new item not yet saved to config
+  const [pmShowClosed, setPmShowClosed] = useState(false);
   const todayStr = dateStr(now);
   const [myDay, setMyDay] = useState({ date: todayStr, frog: "", priorities: [] });
   const [priDragIdx, setPriDragIdx] = useState(null);
@@ -5211,6 +5387,7 @@ export default function WorkHoursTracker({ onImport }) {
           ["week", "📅", "Week"],
           ["tasks", "✓", "Tasks"],
           ...(isPersonal ? [["habits", "✅", "Habits"]] : []),
+          ...(!isPersonal ? [["pm", "⚠️", "PM"]] : []),
           ["reports", "📈", "Reports"],
           ...(isPortfolioManager && !isPersonal ? [["portfolio", "👥", "Portfolio"]] : []),
         ].map(([tab, icon, label]) => (
@@ -9312,6 +9489,166 @@ export default function WorkHoursTracker({ onImport }) {
                 </div>
               </div>
             )}
+          </div>
+        );
+      })()}
+
+      {/* ═══════ PM TAB (Risks & Issues) ═══════ */}
+      {activeTab === "pm" && !isPersonal && (() => {
+        const isRisks = pmView === "risks";
+        const items = (isRisks ? config.risks : config.issues) || [];
+        const projects = activeConfig.projects || [];
+        const todayStr = dateStr(new Date());
+
+        // Severity = likelihood × impact (for risks)
+        const sevMatrix = {
+          "Low-Low": "Low", "Low-Med": "Low", "Low-High": "Med",
+          "Med-Low": "Low", "Med-Med": "Med", "Med-High": "High",
+          "High-Low": "Med", "High-Med": "High", "High-High": "Critical",
+        };
+        const computeSeverity = (l, i) => sevMatrix[`${l}-${i}`] || "Low";
+        const sevColor = (s) => ({
+          Low: "#137333", Med: "#e37400", High: "#d93025", Critical: "#9a0000",
+        }[s] || "#5f6368");
+        const sevBg = (s) => ({
+          Low: "#e6f4ea", Med: "#fef7e0", High: "#fce8e6", Critical: "#fad2cf",
+        }[s] || "#f1f3f4");
+        const statusColor = (s) => ({
+          Open: "#d93025", Monitoring: "#e37400", "In Progress": "#1a73e8", Resolved: "#137333", Closed: "#5f6368",
+        }[s] || "#5f6368");
+
+        const blankRisk = () => ({ id: uid(), title: "", description: "", likelihood: "Med", impact: "Med", mitigation: "", owner: "", status: "Open", project: "", dateRaised: todayStr, reviewDate: "" });
+        const blankIssue = () => ({ id: uid(), title: "", description: "", priority: "Med", impact: "Med", resolution: "", owner: "", status: "Open", project: "", dateRaised: todayStr, dateResolved: "" });
+
+        const saveItem = (item) => {
+          const key = isRisks ? "risks" : "issues";
+          setConfig(prev => {
+            const arr = prev[key] || [];
+            const exists = arr.some(x => x.id === item.id);
+            const next = exists ? arr.map(x => x.id === item.id ? item : x) : [...arr, item];
+            return { ...prev, [key]: next };
+          });
+          setPmEditingId(null);
+          setPmDraftNew(null);
+        };
+        const deleteItem = (id) => {
+          const key = isRisks ? "risks" : "issues";
+          setConfig(prev => ({ ...prev, [key]: (prev[key] || []).filter(x => x.id !== id) }));
+          setPmEditingId(null);
+          setPmDraftNew(null);
+        };
+        const cancelEdit = () => { setPmEditingId(null); setPmDraftNew(null); };
+
+        const visible = items.filter(x => pmShowClosed || !["Closed", "Resolved"].includes(x.status));
+        const sorted = [...visible].sort((a, b) => {
+          if (isRisks) {
+            const sa = computeSeverity(a.likelihood, a.impact);
+            const sb = computeSeverity(b.likelihood, b.impact);
+            const order = { Critical: 0, High: 1, Med: 2, Low: 3 };
+            return order[sa] - order[sb];
+          }
+          const order = { Critical: 0, High: 1, Med: 2, Low: 3 };
+          return order[a.priority] - order[b.priority];
+        });
+
+        const openCount = items.filter(x => !["Closed", "Resolved"].includes(x.status)).length;
+        const riskCount = (config.risks || []).filter(x => !["Closed"].includes(x.status)).length;
+        const issueCount = (config.issues || []).filter(x => !["Closed", "Resolved"].includes(x.status)).length;
+
+        const inputStyle = { fontSize: 13, padding: "6px 10px", borderRadius: 6, border: `1px solid ${darkMode ? "#2a2a4a" : "#dadce0"}`, outline: "none", fontFamily: "'Inter', 'Roboto', sans-serif", background: darkMode ? "#1a1a2e" : "#fff", color: darkMode ? "#e0e0e0" : "#202124", width: "100%", boxSizing: "border-box" };
+        const labelStyle = { fontSize: 11, fontWeight: 600, color: "#5f6368", textTransform: "uppercase", letterSpacing: "0.3px", marginBottom: 4, display: "block" };
+
+        const renderEditor = (item, isNew) => (
+          <PmItemEditor
+            key={item.id}
+            item={item}
+            isRisks={isRisks}
+            projects={projects}
+            onSave={saveItem}
+            onCancel={cancelEdit}
+            onDelete={() => isNew ? cancelEdit() : deleteItem(item.id)}
+            computeSeverity={computeSeverity}
+            sevColor={sevColor}
+            sevBg={sevBg}
+            darkMode={darkMode}
+            inputStyle={inputStyle}
+            labelStyle={labelStyle}
+            isNew={isNew}
+          />
+        );
+
+        return (
+          <div>
+            {/* Sub-tab switcher */}
+            <div style={{ display: "flex", gap: 0, marginBottom: 16, borderBottom: `1px solid ${darkMode ? "#2a2a4a" : "#dadce0"}` }}>
+              {[["risks", "⚠️", "Risks", riskCount], ["issues", "🐞", "Issues", issueCount]].map(([v, icon, label, cnt]) => (
+                <button key={v} onClick={() => { setPmView(v); setPmEditingId(null); setPmDraftNew(null); }} style={{
+                  fontFamily: "'Inter', 'Roboto', sans-serif", fontSize: 14, fontWeight: 500,
+                  padding: "10px 20px", background: "transparent",
+                  color: pmView === v ? "#1a73e8" : "#5f6368",
+                  border: "none",
+                  borderBottom: pmView === v ? "3px solid #1a73e8" : "3px solid transparent",
+                  cursor: "pointer", display: "flex", alignItems: "center", gap: 6,
+                }}>
+                  <span>{icon}</span>
+                  <span>{label}</span>
+                  {cnt > 0 && <span style={{ fontSize: 11, fontWeight: 700, background: pmView === v ? "#1a73e8" : "#5f6368", color: "#fff", borderRadius: 10, padding: "1px 7px" }}>{cnt}</span>}
+                </button>
+              ))}
+            </div>
+
+            {/* Controls */}
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16, flexWrap: "wrap", gap: 8 }}>
+              <div style={{ fontSize: isMobile ? 15 : 18, fontWeight: 700, color: darkMode ? "#e0e0e0" : "#202124" }}>
+                {isRisks ? "⚠️ Risk Log" : "🐞 Issue Log"}
+                <span style={{ marginLeft: 10, fontSize: 13, fontWeight: 500, color: "#5f6368" }}>{openCount} open · {items.length} total</span>
+              </div>
+              <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                <label style={{ fontSize: 13, color: "#5f6368", display: "flex", alignItems: "center", gap: 6, cursor: "pointer" }}>
+                  <input type="checkbox" checked={pmShowClosed} onChange={e => setPmShowClosed(e.target.checked)} />
+                  Show closed
+                </label>
+                <button onClick={() => {
+                  const fresh = isRisks ? blankRisk() : blankIssue();
+                  setPmDraftNew(fresh);
+                  setPmEditingId(fresh.id);
+                }} style={{ background: "#1a73e8", border: "none", color: "#fff", padding: "8px 16px", borderRadius: 20, cursor: "pointer", fontFamily: "'Inter', 'Roboto', sans-serif", fontSize: 13, fontWeight: 700 }}>
+                  + New {isRisks ? "Risk" : "Issue"}
+                </button>
+              </div>
+            </div>
+
+            {/* New item draft */}
+            {pmDraftNew && renderEditor(pmDraftNew, true)}
+
+            {/* Empty state */}
+            {items.length === 0 && !pmDraftNew && (
+              <div style={{ textAlign: "center", padding: "40px 20px", color: "#80868b" }}>
+                <div style={{ fontSize: 40, marginBottom: 12 }}>{isRisks ? "⚠️" : "🐞"}</div>
+                <div style={{ fontSize: 16, fontWeight: 600, marginBottom: 8 }}>No {isRisks ? "risks" : "issues"} logged</div>
+                <div style={{ fontSize: 13 }}>{isRisks ? "Log potential risks to your projects before they materialise" : "Track problems that need to be resolved"}</div>
+              </div>
+            )}
+
+            {/* List */}
+            {sorted.map(item => (
+              pmEditingId === item.id
+                ? renderEditor(item, false)
+                : (
+                  <PmItemCard
+                    key={item.id}
+                    item={item}
+                    isRisks={isRisks}
+                    projects={projects}
+                    onEdit={() => { setPmDraftNew(null); setPmEditingId(item.id); }}
+                    computeSeverity={computeSeverity}
+                    sevColor={sevColor}
+                    sevBg={sevBg}
+                    statusColor={statusColor}
+                    darkMode={darkMode}
+                  />
+                )
+            ))}
           </div>
         );
       })()}
