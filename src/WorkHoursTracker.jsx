@@ -1707,16 +1707,108 @@ function NoteAutoComplete({ value, onChange, onSelectEntry, onEnter, noteHistory
   );
 }
 
-// Card view for a risk or issue in the PM tab — read-only summary with an edit button.
-function PmItemCard({ item, isRisks, projects, onEdit, computeSeverity, sevColor, sevBg, statusColor, darkMode }) {
-  const severity = isRisks ? computeSeverity(item.likelihood, item.impact) : item.priority;
+// Registry of PM log types. Each entry drives the sub-tab, editor, and card so
+// adding a new type only requires an entry here plus an empty array in getDefaultConfig.
+const PM_TYPES = {
+  risks: {
+    label: "Risks", singular: "Risk", icon: "⚠️",
+    statuses: ["Open", "Monitoring", "Closed"],
+    closedStatuses: ["Closed"],
+    hasLikelihood: true,
+    resolutionField: "mitigation", resolutionLabel: "Mitigation",
+    resolutionPlaceholder: "What are we doing to reduce this risk?",
+    followupField: "reviewDate", followupLabel: "Review date", followupDisplay: "Review",
+    emptyMessage: "Log potential risks to your projects before they materialise",
+    descPlaceholder: "What could go wrong, and why it matters",
+  },
+  issues: {
+    label: "Issues", singular: "Issue", icon: "🐞",
+    statuses: ["Open", "In Progress", "Resolved", "Closed"],
+    closedStatuses: ["Closed", "Resolved"],
+    hasImpactField: true,
+    resolutionField: "resolution", resolutionLabel: "Resolution",
+    resolutionPlaceholder: "What's being done to resolve this?",
+    followupField: "dateResolved", followupLabel: "Date resolved", followupDisplay: "Resolved",
+    emptyMessage: "Track problems that need to be resolved",
+    descPlaceholder: "What's happening, and why it matters",
+  },
+  questions: {
+    label: "Questions", singular: "Question", icon: "❓",
+    statuses: ["Open", "Answered", "Closed"],
+    closedStatuses: ["Answered", "Closed"],
+    resolutionField: "answer", resolutionLabel: "Answer",
+    resolutionPlaceholder: "The answer, once known",
+    followupField: "dateAnswered", followupLabel: "Date answered", followupDisplay: "Answered",
+    emptyMessage: "Track open questions that need answers",
+    descPlaceholder: "What needs to be clarified, and who might know",
+  },
+  decisions: {
+    label: "Decisions", singular: "Decision", icon: "🧭",
+    statuses: ["Proposed", "Decided", "Superseded"],
+    closedStatuses: ["Decided", "Superseded"],
+    resolutionField: "outcome", resolutionLabel: "Rationale / Outcome",
+    resolutionPlaceholder: "What was decided and why",
+    followupField: "dateDecided", followupLabel: "Date decided", followupDisplay: "Decided",
+    emptyMessage: "Record key decisions and their rationale",
+    descPlaceholder: "What needs to be decided, and the context",
+  },
+  constraints: {
+    label: "Constraints", singular: "Constraint", icon: "📏",
+    statuses: ["Active", "Lifted"],
+    closedStatuses: ["Lifted"],
+    resolutionField: "detail", resolutionLabel: "Detail / Notes",
+    resolutionPlaceholder: "Additional context about this constraint",
+    followupField: "reviewDate", followupLabel: "Review date", followupDisplay: "Review",
+    emptyMessage: "Document constraints that bound the project",
+    descPlaceholder: "The constraint (budget, deadline, regulation…) and why it matters",
+  },
+  dependencies: {
+    label: "Dependencies", singular: "Dependency", icon: "🔗",
+    statuses: ["Pending", "Blocked", "Resolved"],
+    closedStatuses: ["Resolved"],
+    resolutionField: "detail", resolutionLabel: "Detail / Notes",
+    resolutionPlaceholder: "Updates on this dependency",
+    followupField: "dueDate", followupLabel: "Due date", followupDisplay: "Due",
+    emptyMessage: "Track things you depend on",
+    descPlaceholder: "What you're waiting on, from whom, and what it blocks",
+  },
+  assumptions: {
+    label: "Assumptions", singular: "Assumption", icon: "💭",
+    statuses: ["Open", "Validated", "Invalidated"],
+    closedStatuses: ["Validated", "Invalidated"],
+    resolutionField: "validation", resolutionLabel: "Validation notes",
+    resolutionPlaceholder: "How this was validated, or why it was wrong",
+    followupField: "validateBy", followupLabel: "Validate by", followupDisplay: "Validate by",
+    emptyMessage: "Log assumptions that might need validation later",
+    descPlaceholder: "What you're assuming, and why it's uncertain",
+  },
+};
+
+const PM_STATUS_COLORS = {
+  // red (open/problem)
+  Open: "#d93025", Blocked: "#d93025", Invalidated: "#d93025",
+  // orange (pending action)
+  Monitoring: "#e37400", Proposed: "#e37400", Active: "#e37400", Pending: "#e37400",
+  // blue (in flight)
+  "In Progress": "#1a73e8",
+  // green (resolved positive)
+  Resolved: "#137333", Answered: "#137333", Decided: "#137333", Validated: "#137333",
+  // gray (closed/neutral)
+  Closed: "#5f6368", Superseded: "#5f6368", Lifted: "#5f6368",
+};
+
+// Card view for a PM log item — read-only summary with an edit button.
+function PmItemCard({ item, typeConfig, projects, onEdit, computeSeverity, sevColor, sevBg, darkMode }) {
+  const priority = typeConfig.hasLikelihood ? computeSeverity(item.likelihood, item.impact) : (item.priority || "Med");
   const project = projects.find(p => (typeof p === "string" ? p : p.name) === item.project);
   const projectName = typeof project === "string" ? project : project?.name;
+  const followupVal = item[typeConfig.followupField];
+  const statusCol = PM_STATUS_COLORS[item.status] || "#5f6368";
   return (
     <div onClick={onEdit} style={{
       background: darkMode ? "#1a1a2e" : "#fff",
       border: `1px solid ${darkMode ? "#2a2a4a" : "#e8eaed"}`,
-      borderLeft: `4px solid ${sevColor(severity)}`,
+      borderLeft: `4px solid ${sevColor(priority)}`,
       borderRadius: 12, padding: "14px 18px", marginBottom: 10,
       cursor: "pointer", boxShadow: "0 1px 3px rgba(0,0,0,0.06)",
     }}>
@@ -1725,43 +1817,41 @@ function PmItemCard({ item, isRisks, projects, onEdit, computeSeverity, sevColor
           {item.title || <span style={{ color: "#80868b", fontStyle: "italic" }}>Untitled</span>}
         </div>
         <div style={{ display: "flex", gap: 6, flexShrink: 0 }}>
-          <span style={{ fontSize: 11, fontWeight: 700, background: sevBg(severity), color: sevColor(severity), padding: "3px 10px", borderRadius: 10, textTransform: "uppercase", letterSpacing: "0.3px" }}>{severity}</span>
-          <span style={{ fontSize: 11, fontWeight: 600, color: "#fff", background: statusColor(item.status), padding: "3px 10px", borderRadius: 10 }}>{item.status}</span>
+          <span style={{ fontSize: 11, fontWeight: 700, background: sevBg(priority), color: sevColor(priority), padding: "3px 10px", borderRadius: 10, textTransform: "uppercase", letterSpacing: "0.3px" }}>{priority}</span>
+          <span style={{ fontSize: 11, fontWeight: 600, color: "#fff", background: statusCol, padding: "3px 10px", borderRadius: 10 }}>{item.status}</span>
         </div>
       </div>
       {item.description && (
         <div style={{ fontSize: 13, color: darkMode ? "#a0a0b0" : "#5f6368", marginBottom: 6, whiteSpace: "pre-wrap" }}>{item.description}</div>
       )}
       <div style={{ display: "flex", gap: 14, flexWrap: "wrap", fontSize: 12, color: "#80868b" }}>
-        {isRisks ? (
+        {typeConfig.hasLikelihood && (
           <>
             <span>Likelihood: <strong style={{ color: darkMode ? "#e0e0e0" : "#202124" }}>{item.likelihood}</strong></span>
             <span>Impact: <strong style={{ color: darkMode ? "#e0e0e0" : "#202124" }}>{item.impact}</strong></span>
           </>
-        ) : (
+        )}
+        {typeConfig.hasImpactField && !typeConfig.hasLikelihood && (
           <span>Impact: <strong style={{ color: darkMode ? "#e0e0e0" : "#202124" }}>{item.impact}</strong></span>
         )}
         {item.owner && <span>Owner: <strong style={{ color: darkMode ? "#e0e0e0" : "#202124" }}>{item.owner}</strong></span>}
         {projectName && <span>Project: <strong style={{ color: darkMode ? "#e0e0e0" : "#202124" }}>{projectName}</strong></span>}
         {item.workOrder && <span>Work Order: <strong style={{ color: darkMode ? "#e0e0e0" : "#202124" }}>{item.workOrder}</strong></span>}
         {item.dateRaised && <span>Raised: <strong style={{ color: darkMode ? "#e0e0e0" : "#202124" }}>{item.dateRaised}</strong></span>}
-        {isRisks && item.reviewDate && <span>Review: <strong style={{ color: darkMode ? "#e0e0e0" : "#202124" }}>{item.reviewDate}</strong></span>}
-        {!isRisks && item.dateResolved && <span>Resolved: <strong style={{ color: darkMode ? "#e0e0e0" : "#202124" }}>{item.dateResolved}</strong></span>}
+        {followupVal && <span>{typeConfig.followupDisplay}: <strong style={{ color: darkMode ? "#e0e0e0" : "#202124" }}>{followupVal}</strong></span>}
       </div>
     </div>
   );
 }
 
-// Editor for a single risk/issue; keeps local draft state so typing doesn't trigger
-// a config save on every keystroke.
-function PmItemEditor({ item, isRisks, projects, workOrders, onSave, onCancel, onDelete, computeSeverity, sevColor, sevBg, darkMode, inputStyle, labelStyle, isNew }) {
+// Editor for a single PM log item; keeps local draft state so typing doesn't
+// trigger a config save on every keystroke.
+function PmItemEditor({ item, typeConfig, projects, workOrders, onSave, onCancel, onDelete, computeSeverity, sevColor, sevBg, darkMode, inputStyle, labelStyle, isNew }) {
   const [draft, setDraft] = useState(item);
-  const severity = isRisks ? computeSeverity(draft.likelihood, draft.impact) : draft.priority;
+  const priority = typeConfig.hasLikelihood ? computeSeverity(draft.likelihood, draft.impact) : (draft.priority || "Med");
   const set = (k, v) => setDraft(prev => ({ ...prev, [k]: v }));
   const projectOptions = projects.map(p => typeof p === "string" ? p : p.name).filter(Boolean);
   const woOptions = (workOrders || []).map(w => typeof w === "string" ? w : w.name).filter(Boolean);
-  const riskStatuses = ["Open", "Monitoring", "Closed"];
-  const issueStatuses = ["Open", "In Progress", "Resolved", "Closed"];
   const levels = ["Low", "Med", "High"];
   const priorities = ["Low", "Med", "High", "Critical"];
   const field = (label, node) => (
@@ -1775,18 +1865,18 @@ function PmItemEditor({ item, isRisks, projects, workOrders, onSave, onCancel, o
     <div style={{
       background: darkMode ? "#1a1a2e" : "#fff",
       border: "2px solid #1a73e8",
-      borderLeft: `4px solid ${sevColor(severity)}`,
+      borderLeft: `4px solid ${sevColor(priority)}`,
       borderRadius: 12, padding: "16px 20px", marginBottom: 12,
     }}>
       {field("Title", (
         <input autoFocus value={draft.title} onChange={e => set("title", e.target.value)} placeholder="Short, specific title" style={inputStyle} />
       ))}
       {field("Description", (
-        <textarea value={draft.description} onChange={e => set("description", e.target.value)} placeholder={isRisks ? "What could go wrong, and why it matters" : "What's happening, and why it matters"} rows={3} style={{ ...inputStyle, resize: "vertical", minHeight: 60 }} />
+        <textarea value={draft.description} onChange={e => set("description", e.target.value)} placeholder={typeConfig.descPlaceholder} rows={3} style={{ ...inputStyle, resize: "vertical", minHeight: 60 }} />
       ))}
 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: 10, marginBottom: 10 }}>
-        {isRisks && (
+        {typeConfig.hasLikelihood ? (
           <>
             <div>
               <label style={labelStyle}>Likelihood</label>
@@ -1802,30 +1892,31 @@ function PmItemEditor({ item, isRisks, projects, workOrders, onSave, onCancel, o
             </div>
             <div>
               <label style={labelStyle}>Severity</label>
-              <div style={{ padding: "6px 10px", borderRadius: 6, background: sevBg(severity), color: sevColor(severity), fontSize: 13, fontWeight: 700, textAlign: "center" }}>{severity}</div>
+              <div style={{ padding: "6px 10px", borderRadius: 6, background: sevBg(priority), color: sevColor(priority), fontSize: 13, fontWeight: 700, textAlign: "center" }}>{priority}</div>
             </div>
           </>
-        )}
-        {!isRisks && (
+        ) : (
           <>
             <div>
               <label style={labelStyle}>Priority</label>
-              <select value={draft.priority} onChange={e => set("priority", e.target.value)} style={inputStyle}>
+              <select value={draft.priority || "Med"} onChange={e => set("priority", e.target.value)} style={inputStyle}>
                 {priorities.map(l => <option key={l} value={l}>{l}</option>)}
               </select>
             </div>
-            <div>
-              <label style={labelStyle}>Impact</label>
-              <select value={draft.impact} onChange={e => set("impact", e.target.value)} style={inputStyle}>
-                {levels.map(l => <option key={l} value={l}>{l}</option>)}
-              </select>
-            </div>
+            {typeConfig.hasImpactField && (
+              <div>
+                <label style={labelStyle}>Impact</label>
+                <select value={draft.impact || "Med"} onChange={e => set("impact", e.target.value)} style={inputStyle}>
+                  {levels.map(l => <option key={l} value={l}>{l}</option>)}
+                </select>
+              </div>
+            )}
           </>
         )}
         <div>
           <label style={labelStyle}>Status</label>
           <select value={draft.status} onChange={e => set("status", e.target.value)} style={inputStyle}>
-            {(isRisks ? riskStatuses : issueStatuses).map(s => <option key={s} value={s}>{s}</option>)}
+            {typeConfig.statuses.map(s => <option key={s} value={s}>{s}</option>)}
           </select>
         </div>
       </div>
@@ -1853,21 +1944,14 @@ function PmItemEditor({ item, isRisks, projects, workOrders, onSave, onCancel, o
           <label style={labelStyle}>Date raised</label>
           <input type="date" value={draft.dateRaised || ""} onChange={e => set("dateRaised", e.target.value)} style={inputStyle} />
         </div>
-        {isRisks ? (
-          <div>
-            <label style={labelStyle}>Review date</label>
-            <input type="date" value={draft.reviewDate || ""} onChange={e => set("reviewDate", e.target.value)} style={inputStyle} />
-          </div>
-        ) : (
-          <div>
-            <label style={labelStyle}>Date resolved</label>
-            <input type="date" value={draft.dateResolved || ""} onChange={e => set("dateResolved", e.target.value)} style={inputStyle} />
-          </div>
-        )}
+        <div>
+          <label style={labelStyle}>{typeConfig.followupLabel}</label>
+          <input type="date" value={draft[typeConfig.followupField] || ""} onChange={e => set(typeConfig.followupField, e.target.value)} style={inputStyle} />
+        </div>
       </div>
 
-      {field(isRisks ? "Mitigation" : "Resolution", (
-        <textarea value={isRisks ? draft.mitigation : draft.resolution} onChange={e => set(isRisks ? "mitigation" : "resolution", e.target.value)} placeholder={isRisks ? "What are we doing to reduce this risk?" : "What's being done to resolve this?"} rows={2} style={{ ...inputStyle, resize: "vertical", minHeight: 48 }} />
+      {field(typeConfig.resolutionLabel, (
+        <textarea value={draft[typeConfig.resolutionField] || ""} onChange={e => set(typeConfig.resolutionField, e.target.value)} placeholder={typeConfig.resolutionPlaceholder} rows={2} style={{ ...inputStyle, resize: "vertical", minHeight: 48 }} />
       ))}
 
       <div style={{ display: "flex", justifyContent: "space-between", gap: 8, marginTop: 4 }}>
@@ -1890,7 +1974,7 @@ function PmItemEditor({ item, isRisks, projects, workOrders, onSave, onCancel, o
 // Baseline shapes used when (re)loading a profile — ensures switching profiles
 // can't leak the previous profile's config through a partial merge.
 function getDefaultConfig() {
-  return { customers: [], projects: [], workOrders: [], activities: [], tags: [], activityTemplates: [], favouriteActivities: [], roles: [], favouriteRoles: [], favouriteTags: [], billRates: [], favouriteBillRates: [], tagCategories: {}, bankHolidayRegion: "", customHolidays: {}, showDailyQuote: true, taskTemplates: [], risks: [], issues: [] };
+  return { customers: [], projects: [], workOrders: [], activities: [], tags: [], activityTemplates: [], favouriteActivities: [], roles: [], favouriteRoles: [], favouriteTags: [], billRates: [], favouriteBillRates: [], tagCategories: {}, bankHolidayRegion: "", customHolidays: {}, showDailyQuote: true, taskTemplates: [], risks: [], issues: [], questions: [], decisions: [], constraints: [], dependencies: [], assumptions: [] };
 }
 function getDefaultDefaults() {
   return { customer: "", project: "", workOrder: "", activity: "", role: "", billRate: "", startTime: "09:00", endTime: "17:30", wakeTime: "07:00", workStartTime: "09:00", lunchStartTime: "12:00", lunchEndTime: "13:00", workEndTime: "17:30", bedTime: "22:30", workDays: [0, 1, 2, 3, 4] };
@@ -9502,10 +9586,11 @@ export default function WorkHoursTracker({ onImport }) {
         );
       })()}
 
-      {/* ═══════ PM TAB (Risks & Issues) ═══════ */}
+      {/* ═══════ PM TAB (Risks, Issues, Questions, Decisions, Constraints, Dependencies, Assumptions) ═══════ */}
       {activeTab === "pm" && !isPersonal && (() => {
-        const isRisks = pmView === "risks";
-        const items = (isRisks ? config.risks : config.issues) || [];
+        const typeKey = PM_TYPES[pmView] ? pmView : "risks";
+        const typeConfig = PM_TYPES[typeKey];
+        const items = config[typeKey] || [];
         const projects = activeConfig.projects || [];
         const workOrders = activeConfig.workOrders || [];
         const todayStr = dateStr(new Date());
@@ -9514,7 +9599,7 @@ export default function WorkHoursTracker({ onImport }) {
         const projectOptions = projects.map(p => typeof p === "string" ? p : p.name).filter(Boolean);
         const woOptions = workOrders.map(w => typeof w === "string" ? w : w.name).filter(Boolean);
 
-        // Severity = likelihood × impact (for risks)
+        // Severity = likelihood × impact (used by risks; reused as colour scale for priority on other types)
         const sevMatrix = {
           "Low-Low": "Low", "Low-Med": "Low", "Low-High": "Med",
           "Med-Low": "Low", "Med-Med": "Med", "Med-High": "High",
@@ -9527,47 +9612,45 @@ export default function WorkHoursTracker({ onImport }) {
         const sevBg = (s) => ({
           Low: "#e6f4ea", Med: "#fef7e0", High: "#fce8e6", Critical: "#fad2cf",
         }[s] || "#f1f3f4");
-        const statusColor = (s) => ({
-          Open: "#d93025", Monitoring: "#e37400", "In Progress": "#1a73e8", Resolved: "#137333", Closed: "#5f6368",
-        }[s] || "#5f6368");
 
-        const blankRisk = () => ({ id: uid(), title: "", description: "", likelihood: "Med", impact: "Med", mitigation: "", owner: "", status: "Open", project: pmDefProject, workOrder: pmDefWorkOrder, dateRaised: todayStr, reviewDate: "" });
-        const blankIssue = () => ({ id: uid(), title: "", description: "", priority: "Med", impact: "Med", resolution: "", owner: "", status: "Open", project: pmDefProject, workOrder: pmDefWorkOrder, dateRaised: todayStr, dateResolved: "" });
+        const blankItem = () => {
+          const base = {
+            id: uid(), title: "", description: "", owner: "", status: typeConfig.statuses[0],
+            project: pmDefProject, workOrder: pmDefWorkOrder, dateRaised: todayStr,
+            [typeConfig.resolutionField]: "", [typeConfig.followupField]: "",
+          };
+          if (typeConfig.hasLikelihood) { base.likelihood = "Med"; base.impact = "Med"; }
+          else { base.priority = "Med"; if (typeConfig.hasImpactField) base.impact = "Med"; }
+          return base;
+        };
 
         const saveItem = (item) => {
-          const key = isRisks ? "risks" : "issues";
           setConfig(prev => {
-            const arr = prev[key] || [];
+            const arr = prev[typeKey] || [];
             const exists = arr.some(x => x.id === item.id);
             const next = exists ? arr.map(x => x.id === item.id ? item : x) : [...arr, item];
-            return { ...prev, [key]: next };
+            return { ...prev, [typeKey]: next };
           });
           setPmEditingId(null);
           setPmDraftNew(null);
         };
         const deleteItem = (id) => {
-          const key = isRisks ? "risks" : "issues";
-          setConfig(prev => ({ ...prev, [key]: (prev[key] || []).filter(x => x.id !== id) }));
+          setConfig(prev => ({ ...prev, [typeKey]: (prev[typeKey] || []).filter(x => x.id !== id) }));
           setPmEditingId(null);
           setPmDraftNew(null);
         };
         const cancelEdit = () => { setPmEditingId(null); setPmDraftNew(null); };
 
-        const visible = items.filter(x => pmShowClosed || !["Closed", "Resolved"].includes(x.status));
+        const isClosed = (item) => typeConfig.closedStatuses.includes(item.status);
+        const visible = items.filter(x => pmShowClosed || !isClosed(x));
+        const priorityOrder = { Critical: 0, High: 1, Med: 2, Low: 3 };
         const sorted = [...visible].sort((a, b) => {
-          if (isRisks) {
-            const sa = computeSeverity(a.likelihood, a.impact);
-            const sb = computeSeverity(b.likelihood, b.impact);
-            const order = { Critical: 0, High: 1, Med: 2, Low: 3 };
-            return order[sa] - order[sb];
-          }
-          const order = { Critical: 0, High: 1, Med: 2, Low: 3 };
-          return order[a.priority] - order[b.priority];
+          const pa = typeConfig.hasLikelihood ? computeSeverity(a.likelihood, a.impact) : (a.priority || "Med");
+          const pb = typeConfig.hasLikelihood ? computeSeverity(b.likelihood, b.impact) : (b.priority || "Med");
+          return priorityOrder[pa] - priorityOrder[pb];
         });
 
-        const openCount = items.filter(x => !["Closed", "Resolved"].includes(x.status)).length;
-        const riskCount = (config.risks || []).filter(x => !["Closed"].includes(x.status)).length;
-        const issueCount = (config.issues || []).filter(x => !["Closed", "Resolved"].includes(x.status)).length;
+        const openCount = items.filter(x => !isClosed(x)).length;
 
         const inputStyle = { fontSize: 13, padding: "6px 10px", borderRadius: 6, border: `1px solid ${darkMode ? "#2a2a4a" : "#dadce0"}`, outline: "none", fontFamily: "'Inter', 'Roboto', sans-serif", background: darkMode ? "#1a1a2e" : "#fff", color: darkMode ? "#e0e0e0" : "#202124", width: "100%", boxSizing: "border-box" };
         const labelStyle = { fontSize: 11, fontWeight: 600, color: "#5f6368", textTransform: "uppercase", letterSpacing: "0.3px", marginBottom: 4, display: "block" };
@@ -9576,7 +9659,7 @@ export default function WorkHoursTracker({ onImport }) {
           <PmItemEditor
             key={item.id}
             item={item}
-            isRisks={isRisks}
+            typeConfig={typeConfig}
             projects={projects}
             workOrders={workOrders}
             onSave={saveItem}
@@ -9595,27 +9678,31 @@ export default function WorkHoursTracker({ onImport }) {
         return (
           <div>
             {/* Sub-tab switcher */}
-            <div style={{ display: "flex", gap: 0, marginBottom: 16, borderBottom: `1px solid ${darkMode ? "#2a2a4a" : "#dadce0"}` }}>
-              {[["risks", "⚠️", "Risks", riskCount], ["issues", "🐞", "Issues", issueCount]].map(([v, icon, label, cnt]) => (
-                <button key={v} onClick={() => { setPmView(v); setPmEditingId(null); setPmDraftNew(null); }} style={{
-                  fontFamily: "'Inter', 'Roboto', sans-serif", fontSize: 14, fontWeight: 500,
-                  padding: "10px 20px", background: "transparent",
-                  color: pmView === v ? "#1a73e8" : "#5f6368",
-                  border: "none",
-                  borderBottom: pmView === v ? "3px solid #1a73e8" : "3px solid transparent",
-                  cursor: "pointer", display: "flex", alignItems: "center", gap: 6,
-                }}>
-                  <span>{icon}</span>
-                  <span>{label}</span>
-                  {cnt > 0 && <span style={{ fontSize: 11, fontWeight: 700, background: pmView === v ? "#1a73e8" : "#5f6368", color: "#fff", borderRadius: 10, padding: "1px 7px" }}>{cnt}</span>}
-                </button>
-              ))}
+            <div className="wht-scroll-x" style={{ display: "flex", gap: 0, marginBottom: 16, borderBottom: `1px solid ${darkMode ? "#2a2a4a" : "#dadce0"}`, overflowX: "auto", scrollbarWidth: "none" }}>
+              {Object.entries(PM_TYPES).map(([v, cfg]) => {
+                const cnt = (config[v] || []).filter(x => !cfg.closedStatuses.includes(x.status)).length;
+                return (
+                  <button key={v} onClick={() => { setPmView(v); setPmEditingId(null); setPmDraftNew(null); }} style={{
+                    fontFamily: "'Inter', 'Roboto', sans-serif", fontSize: 13, fontWeight: 500,
+                    padding: "10px 14px", background: "transparent",
+                    color: pmView === v ? "#1a73e8" : "#5f6368",
+                    border: "none",
+                    borderBottom: pmView === v ? "3px solid #1a73e8" : "3px solid transparent",
+                    cursor: "pointer", display: "flex", alignItems: "center", gap: 6,
+                    whiteSpace: "nowrap", flexShrink: 0,
+                  }}>
+                    <span>{cfg.icon}</span>
+                    <span>{cfg.label}</span>
+                    {cnt > 0 && <span style={{ fontSize: 11, fontWeight: 700, background: pmView === v ? "#1a73e8" : "#5f6368", color: "#fff", borderRadius: 10, padding: "1px 7px" }}>{cnt}</span>}
+                  </button>
+                );
+              })}
             </div>
 
             {/* Controls */}
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 16, flexWrap: "wrap", gap: 8 }}>
               <div style={{ fontSize: isMobile ? 15 : 18, fontWeight: 700, color: darkMode ? "#e0e0e0" : "#202124" }}>
-                {isRisks ? "⚠️ Risk Log" : "🐞 Issue Log"}
+                {typeConfig.icon} {typeConfig.label}
                 <span style={{ marginLeft: 10, fontSize: 13, fontWeight: 500, color: "#5f6368" }}>{openCount} open · {items.length} total</span>
               </div>
               <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
@@ -9624,11 +9711,11 @@ export default function WorkHoursTracker({ onImport }) {
                   Show closed
                 </label>
                 <button onClick={() => {
-                  const fresh = isRisks ? blankRisk() : blankIssue();
+                  const fresh = blankItem();
                   setPmDraftNew(fresh);
                   setPmEditingId(fresh.id);
                 }} style={{ background: "#1a73e8", border: "none", color: "#fff", padding: "8px 16px", borderRadius: 20, cursor: "pointer", fontFamily: "'Inter', 'Roboto', sans-serif", fontSize: 13, fontWeight: 700 }}>
-                  + New {isRisks ? "Risk" : "Issue"}
+                  + New {typeConfig.singular}
                 </button>
               </div>
             </div>
@@ -9658,9 +9745,9 @@ export default function WorkHoursTracker({ onImport }) {
             {/* Empty state */}
             {items.length === 0 && !pmDraftNew && (
               <div style={{ textAlign: "center", padding: "40px 20px", color: "#80868b" }}>
-                <div style={{ fontSize: 40, marginBottom: 12 }}>{isRisks ? "⚠️" : "🐞"}</div>
-                <div style={{ fontSize: 16, fontWeight: 600, marginBottom: 8 }}>No {isRisks ? "risks" : "issues"} logged</div>
-                <div style={{ fontSize: 13 }}>{isRisks ? "Log potential risks to your projects before they materialise" : "Track problems that need to be resolved"}</div>
+                <div style={{ fontSize: 40, marginBottom: 12 }}>{typeConfig.icon}</div>
+                <div style={{ fontSize: 16, fontWeight: 600, marginBottom: 8 }}>No {typeConfig.label.toLowerCase()} logged</div>
+                <div style={{ fontSize: 13 }}>{typeConfig.emptyMessage}</div>
               </div>
             )}
 
@@ -9672,13 +9759,12 @@ export default function WorkHoursTracker({ onImport }) {
                   <PmItemCard
                     key={item.id}
                     item={item}
-                    isRisks={isRisks}
+                    typeConfig={typeConfig}
                     projects={projects}
                     onEdit={() => { setPmDraftNew(null); setPmEditingId(item.id); }}
                     computeSeverity={computeSeverity}
                     sevColor={sevColor}
                     sevBg={sevBg}
-                    statusColor={statusColor}
                     darkMode={darkMode}
                   />
                 )
