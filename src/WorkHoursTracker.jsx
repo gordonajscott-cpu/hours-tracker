@@ -2094,6 +2094,8 @@ export default function WorkHoursTracker({ onImport }) {
   const [pmEditingId, setPmEditingId] = useState(null); // id of risk/issue being edited
   const [pmDraftNew, setPmDraftNew] = useState(null); // in-progress new item not yet saved to config
   const [pmShowClosed, setPmShowClosed] = useState(false);
+  const [pmFilterProject, setPmFilterProject] = useState("");
+  const [pmFilterWorkOrder, setPmFilterWorkOrder] = useState("");
   const [pmReportProject, setPmReportProject] = useState("");
   const [pmReportPeriod, setPmReportPeriod] = useState("month"); // week | month | quarter | year
   const todayStr = dateStr(now);
@@ -9975,7 +9977,12 @@ export default function WorkHoursTracker({ onImport }) {
         const cancelEdit = () => { setPmEditingId(null); setPmDraftNew(null); };
 
         const isClosed = (item) => typeConfig.closedStatuses.includes(item.status);
-        const visible = items.filter(x => pmShowClosed || !isClosed(x));
+        const matchesFilter = (x) => {
+          if (pmFilterProject && (x.project || "") !== pmFilterProject) return false;
+          if (pmFilterWorkOrder && (x.workOrder || "") !== pmFilterWorkOrder) return false;
+          return true;
+        };
+        const visible = items.filter(x => matchesFilter(x) && (pmShowClosed || !isClosed(x)));
         const priorityOrder = { Critical: 0, High: 1, Med: 2, Low: 3 };
         const sorted = [...visible].sort((a, b) => {
           const pa = typeConfig.hasLikelihood ? computeSeverity(a.likelihood, a.impact) : (a.priority || "Med");
@@ -9983,7 +9990,7 @@ export default function WorkHoursTracker({ onImport }) {
           return priorityOrder[pa] - priorityOrder[pb];
         });
 
-        const openCount = items.filter(x => !isClosed(x)).length;
+        const openCount = items.filter(x => matchesFilter(x) && !isClosed(x)).length;
 
         const inputStyle = { fontSize: 13, padding: "6px 10px", borderRadius: 6, border: `1px solid ${darkMode ? "#2a2a4a" : "#dadce0"}`, outline: "none", fontFamily: "'Inter', 'Roboto', sans-serif", background: darkMode ? "#1a1a2e" : "#fff", color: darkMode ? "#e0e0e0" : "#202124", width: "100%", boxSizing: "border-box" };
         const labelStyle = { fontSize: 11, fontWeight: 600, color: "#5f6368", textTransform: "uppercase", letterSpacing: "0.3px", marginBottom: 4, display: "block" };
@@ -10013,7 +10020,7 @@ export default function WorkHoursTracker({ onImport }) {
             {/* Sub-tab switcher */}
             <div className="wht-scroll-x" style={{ display: "flex", gap: 0, marginBottom: 16, borderBottom: `1px solid ${darkMode ? "#2a2a4a" : "#dadce0"}`, overflowX: "auto", scrollbarWidth: "none" }}>
               {Object.entries(PM_TYPES).map(([v, cfg]) => {
-                const cnt = (config[v] || []).filter(x => !cfg.closedStatuses.includes(x.status)).length;
+                const cnt = (config[v] || []).filter(x => matchesFilter(x) && !cfg.closedStatuses.includes(x.status)).length;
                 return (
                   <button key={v} onClick={() => { setPmView(v); setPmEditingId(null); setPmDraftNew(null); }} style={{
                     fontFamily: "'Inter', 'Roboto', sans-serif", fontSize: 13, fontWeight: 500,
@@ -10051,6 +10058,28 @@ export default function WorkHoursTracker({ onImport }) {
                   + New {typeConfig.singular}
                 </button>
               </div>
+            </div>
+
+            {/* Filters */}
+            <div style={{ background: darkMode ? "#1a1a2e" : "#f8f9fa", border: `1px solid ${darkMode ? "#2a2a4a" : "#e8eaed"}`, borderRadius: 10, padding: "10px 16px", marginBottom: 10, display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
+              <span style={{ fontSize: 12, fontWeight: 600, color: "#5f6368" }}>Filter:</span>
+              <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                <label style={{ fontSize: 12, color: "#5f6368" }}>Project</label>
+                <select value={pmFilterProject} onChange={e => setPmFilterProject(e.target.value)} style={{ fontSize: 12, padding: "3px 8px", borderRadius: 6, border: `1px solid ${darkMode ? "#2a2a4a" : "#dadce0"}`, background: darkMode ? "#1a1a2e" : "#fff", color: darkMode ? "#e0e0e0" : "#202124" }}>
+                  <option value="">All</option>
+                  {projectOptions.map(p => <option key={p} value={p}>{p}</option>)}
+                </select>
+              </div>
+              <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                <label style={{ fontSize: 12, color: "#5f6368" }}>Work Order</label>
+                <select value={pmFilterWorkOrder} onChange={e => setPmFilterWorkOrder(e.target.value)} style={{ fontSize: 12, padding: "3px 8px", borderRadius: 6, border: `1px solid ${darkMode ? "#2a2a4a" : "#dadce0"}`, background: darkMode ? "#1a1a2e" : "#fff", color: darkMode ? "#e0e0e0" : "#202124" }}>
+                  <option value="">All</option>
+                  {woOptions.map(w => <option key={w} value={w}>{w}</option>)}
+                </select>
+              </div>
+              {(pmFilterProject || pmFilterWorkOrder) && (
+                <button onClick={() => { setPmFilterProject(""); setPmFilterWorkOrder(""); }} style={{ fontSize: 11, color: "#d93025", background: "transparent", border: "none", cursor: "pointer", fontWeight: 600 }}>Clear</button>
+              )}
             </div>
 
             {/* Defaults for new items */}
