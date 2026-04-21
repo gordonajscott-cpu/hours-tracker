@@ -1743,6 +1743,7 @@ function PmItemCard({ item, isRisks, projects, onEdit, computeSeverity, sevColor
         )}
         {item.owner && <span>Owner: <strong style={{ color: darkMode ? "#e0e0e0" : "#202124" }}>{item.owner}</strong></span>}
         {projectName && <span>Project: <strong style={{ color: darkMode ? "#e0e0e0" : "#202124" }}>{projectName}</strong></span>}
+        {item.workOrder && <span>Work Order: <strong style={{ color: darkMode ? "#e0e0e0" : "#202124" }}>{item.workOrder}</strong></span>}
         {item.dateRaised && <span>Raised: <strong style={{ color: darkMode ? "#e0e0e0" : "#202124" }}>{item.dateRaised}</strong></span>}
         {isRisks && item.reviewDate && <span>Review: <strong style={{ color: darkMode ? "#e0e0e0" : "#202124" }}>{item.reviewDate}</strong></span>}
         {!isRisks && item.dateResolved && <span>Resolved: <strong style={{ color: darkMode ? "#e0e0e0" : "#202124" }}>{item.dateResolved}</strong></span>}
@@ -1753,11 +1754,12 @@ function PmItemCard({ item, isRisks, projects, onEdit, computeSeverity, sevColor
 
 // Editor for a single risk/issue; keeps local draft state so typing doesn't trigger
 // a config save on every keystroke.
-function PmItemEditor({ item, isRisks, projects, onSave, onCancel, onDelete, computeSeverity, sevColor, sevBg, darkMode, inputStyle, labelStyle, isNew }) {
+function PmItemEditor({ item, isRisks, projects, workOrders, onSave, onCancel, onDelete, computeSeverity, sevColor, sevBg, darkMode, inputStyle, labelStyle, isNew }) {
   const [draft, setDraft] = useState(item);
   const severity = isRisks ? computeSeverity(draft.likelihood, draft.impact) : draft.priority;
   const set = (k, v) => setDraft(prev => ({ ...prev, [k]: v }));
   const projectOptions = projects.map(p => typeof p === "string" ? p : p.name).filter(Boolean);
+  const woOptions = (workOrders || []).map(w => typeof w === "string" ? w : w.name).filter(Boolean);
   const riskStatuses = ["Open", "Monitoring", "Closed"];
   const issueStatuses = ["Open", "In Progress", "Resolved", "Closed"];
   const levels = ["Low", "Med", "High"];
@@ -1838,6 +1840,13 @@ function PmItemEditor({ item, isRisks, projects, onSave, onCancel, onDelete, com
           <select value={draft.project} onChange={e => set("project", e.target.value)} style={inputStyle}>
             <option value="">(none)</option>
             {projectOptions.map(p => <option key={p} value={p}>{p}</option>)}
+          </select>
+        </div>
+        <div>
+          <label style={labelStyle}>Work Order</label>
+          <select value={draft.workOrder || ""} onChange={e => set("workOrder", e.target.value)} style={inputStyle}>
+            <option value="">(none)</option>
+            {woOptions.map(w => <option key={w} value={w}>{w}</option>)}
           </select>
         </div>
         <div>
@@ -9498,7 +9507,12 @@ export default function WorkHoursTracker({ onImport }) {
         const isRisks = pmView === "risks";
         const items = (isRisks ? config.risks : config.issues) || [];
         const projects = activeConfig.projects || [];
+        const workOrders = activeConfig.workOrders || [];
         const todayStr = dateStr(new Date());
+        const pmDefProject = config.pmDefaultProject || "";
+        const pmDefWorkOrder = config.pmDefaultWorkOrder || "";
+        const projectOptions = projects.map(p => typeof p === "string" ? p : p.name).filter(Boolean);
+        const woOptions = workOrders.map(w => typeof w === "string" ? w : w.name).filter(Boolean);
 
         // Severity = likelihood × impact (for risks)
         const sevMatrix = {
@@ -9517,8 +9531,8 @@ export default function WorkHoursTracker({ onImport }) {
           Open: "#d93025", Monitoring: "#e37400", "In Progress": "#1a73e8", Resolved: "#137333", Closed: "#5f6368",
         }[s] || "#5f6368");
 
-        const blankRisk = () => ({ id: uid(), title: "", description: "", likelihood: "Med", impact: "Med", mitigation: "", owner: "", status: "Open", project: "", dateRaised: todayStr, reviewDate: "" });
-        const blankIssue = () => ({ id: uid(), title: "", description: "", priority: "Med", impact: "Med", resolution: "", owner: "", status: "Open", project: "", dateRaised: todayStr, dateResolved: "" });
+        const blankRisk = () => ({ id: uid(), title: "", description: "", likelihood: "Med", impact: "Med", mitigation: "", owner: "", status: "Open", project: pmDefProject, workOrder: pmDefWorkOrder, dateRaised: todayStr, reviewDate: "" });
+        const blankIssue = () => ({ id: uid(), title: "", description: "", priority: "Med", impact: "Med", resolution: "", owner: "", status: "Open", project: pmDefProject, workOrder: pmDefWorkOrder, dateRaised: todayStr, dateResolved: "" });
 
         const saveItem = (item) => {
           const key = isRisks ? "risks" : "issues";
@@ -9564,6 +9578,7 @@ export default function WorkHoursTracker({ onImport }) {
             item={item}
             isRisks={isRisks}
             projects={projects}
+            workOrders={workOrders}
             onSave={saveItem}
             onCancel={cancelEdit}
             onDelete={() => isNew ? cancelEdit() : deleteItem(item.id)}
@@ -9615,6 +9630,25 @@ export default function WorkHoursTracker({ onImport }) {
                 }} style={{ background: "#1a73e8", border: "none", color: "#fff", padding: "8px 16px", borderRadius: 20, cursor: "pointer", fontFamily: "'Inter', 'Roboto', sans-serif", fontSize: 13, fontWeight: 700 }}>
                   + New {isRisks ? "Risk" : "Issue"}
                 </button>
+              </div>
+            </div>
+
+            {/* Defaults for new items */}
+            <div style={{ background: darkMode ? "#1a1a2e" : "#f8f9fa", border: `1px solid ${darkMode ? "#2a2a4a" : "#e8eaed"}`, borderRadius: 10, padding: "10px 16px", marginBottom: 16, display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
+              <span style={{ fontSize: 12, fontWeight: 600, color: "#5f6368" }}>Defaults:</span>
+              <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                <label style={{ fontSize: 12, color: "#5f6368" }}>Project</label>
+                <select value={pmDefProject} onChange={e => setConfig(prev => ({ ...prev, pmDefaultProject: e.target.value }))} style={{ fontSize: 12, padding: "3px 8px", borderRadius: 6, border: `1px solid ${darkMode ? "#2a2a4a" : "#dadce0"}`, background: darkMode ? "#1a1a2e" : "#fff", color: darkMode ? "#e0e0e0" : "#202124" }}>
+                  <option value="">(none)</option>
+                  {projectOptions.map(p => <option key={p} value={p}>{p}</option>)}
+                </select>
+              </div>
+              <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
+                <label style={{ fontSize: 12, color: "#5f6368" }}>Work Order</label>
+                <select value={pmDefWorkOrder} onChange={e => setConfig(prev => ({ ...prev, pmDefaultWorkOrder: e.target.value }))} style={{ fontSize: 12, padding: "3px 8px", borderRadius: 6, border: `1px solid ${darkMode ? "#2a2a4a" : "#dadce0"}`, background: darkMode ? "#1a1a2e" : "#fff", color: darkMode ? "#e0e0e0" : "#202124" }}>
+                  <option value="">(none)</option>
+                  {woOptions.map(w => <option key={w} value={w}>{w}</option>)}
+                </select>
               </div>
             </div>
 
