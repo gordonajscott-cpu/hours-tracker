@@ -8645,7 +8645,7 @@ export default function WorkHoursTracker({ onImport }) {
 
               {/* ── WEEKLY ── */}
               {reportView === "weekly" && (() => {
-                const { days, total, overtime } = weeklyReportData;
+                const { days, total, overtime, contracted, holidayCount } = weeklyReportData;
                 return (
                   <div>
                     <div style={{ display: "flex", flexDirection: "column", gap: 6, marginBottom: 18 }}>
@@ -8681,7 +8681,8 @@ export default function WorkHoursTracker({ onImport }) {
                         </div>
                         <div style={{ background: "#ffffff", border: "1px solid #dadce0", borderRadius: 12, padding: "16px 20px", textAlign: "center", boxShadow: "0 1px 3px rgba(0,0,0,0.08)" }}>
                           <div style={{ fontSize: 13, color: "#5f6368", textTransform: "uppercase", letterSpacing: "1px", marginBottom: 6 }}>Contracted</div>
-                          <div style={{ fontSize: 28, fontWeight: 700, fontFamily: "'Inter', 'Roboto', sans-serif", color: "#5f6368" }}>{fmtH(stdHrs)}</div>
+                          <div style={{ fontSize: 28, fontWeight: 700, fontFamily: "'Inter', 'Roboto', sans-serif", color: "#5f6368" }}>{fmtH(contracted)}</div>
+                          {holidayCount > 0 && <div style={{ fontSize: 11, color: "#d93025", marginTop: 4 }}>−{fmtH(holidayCount * dailyHrs)}h ({holidayCount} hol.)</div>}
                         </div>
                         <div style={{ background: overtime > 0 ? "#e8f0fe" : "#ffffff", border: `1px solid ${overtime > 0 ? "#1a73e8" : "#dadce0"}`, borderRadius: 12, padding: "16px 20px", textAlign: "center", boxShadow: "0 1px 3px rgba(0,0,0,0.08)" }}>
                           <div style={{ fontSize: 13, color: "#5f6368", textTransform: "uppercase", letterSpacing: "1px", marginBottom: 6 }}>Overtime</div>
@@ -8695,7 +8696,7 @@ export default function WorkHoursTracker({ onImport }) {
 
               {/* ── MONTHLY ── */}
               {reportView === "monthly" && (() => {
-                const { weeks, totalHours, contracted, overtime } = monthlyReportData;
+                const { weeks, totalHours, contracted, overtime, holidayCount } = monthlyReportData;
                 return (
                   <div>
                     <div style={{ display: "flex", flexDirection: "column", gap: 6, marginBottom: 18 }}>
@@ -8732,6 +8733,7 @@ export default function WorkHoursTracker({ onImport }) {
                           <div style={{ background: "#ffffff", border: "1px solid #dadce0", borderRadius: 12, padding: "16px 20px", textAlign: "center", boxShadow: "0 1px 3px rgba(0,0,0,0.08)" }}>
                             <div style={{ fontSize: 13, color: "#5f6368", textTransform: "uppercase", letterSpacing: "1px", marginBottom: 6 }}>Contracted</div>
                             <div style={{ fontSize: 28, fontWeight: 700, fontFamily: "'Inter', 'Roboto', sans-serif", color: "#5f6368" }}>{fmtH(contracted)}</div>
+                            {holidayCount > 0 && <div style={{ fontSize: 11, color: "#d93025", marginTop: 4 }}>−{fmtH(holidayCount * dailyHrs)}h ({holidayCount} hol.)</div>}
                           </div>
                           <div style={{ background: overtime > 0 ? "#e8f0fe" : "#ffffff", border: `1px solid ${overtime > 0 ? "#1a73e8" : "#dadce0"}`, borderRadius: 12, padding: "16px 20px", textAlign: "center", boxShadow: "0 1px 3px rgba(0,0,0,0.08)" }}>
                             <div style={{ fontSize: 13, color: "#5f6368", textTransform: "uppercase", letterSpacing: "1px", marginBottom: 6 }}>Overtime</div>
@@ -8760,7 +8762,7 @@ export default function WorkHoursTracker({ onImport }) {
 
               {/* ── ANNUAL ── */}
               {reportView === "annual" && (() => {
-                const { months, totalHours, contracted, overtime } = annualReportData;
+                const { months, totalHours, contracted, overtime, holidayCount } = annualReportData;
                 const maxMonth = Math.max(...months.map(m => m.hours), 1);
                 return (
                   <div>
@@ -8798,6 +8800,7 @@ export default function WorkHoursTracker({ onImport }) {
                         <div style={{ background: "#ffffff", border: "1px solid #dadce0", borderRadius: 12, padding: "18px 22px", textAlign: "center", boxShadow: "0 1px 3px rgba(0,0,0,0.08)" }}>
                           <div style={{ fontSize: 13, color: "#5f6368", textTransform: "uppercase", letterSpacing: "1px", marginBottom: 8 }}>Contracted</div>
                           <div style={{ fontSize: 30, fontWeight: 700, fontFamily: "'Inter', 'Roboto', sans-serif", color: "#5f6368" }}>{fmtH(contracted)}</div>
+                          {holidayCount > 0 && <div style={{ fontSize: 11, color: "#d93025", marginTop: 4 }}>−{fmtH(holidayCount * dailyHrs)}h ({holidayCount} hol.)</div>}
                         </div>
                         <div style={{ background: overtime > 0 ? "#e8f0fe" : "#ffffff", border: `1px solid ${overtime > 0 ? "#1a73e8" : "#dadce0"}`, borderRadius: 12, padding: "18px 22px", textAlign: "center", boxShadow: "0 1px 3px rgba(0,0,0,0.08)" }}>
                           <div style={{ fontSize: 13, color: "#5f6368", textTransform: "uppercase", letterSpacing: "1px", marginBottom: 8 }}>Overtime</div>
