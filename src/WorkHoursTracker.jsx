@@ -2094,6 +2094,8 @@ export default function WorkHoursTracker({ onImport }) {
   const [pmEditingId, setPmEditingId] = useState(null); // id of risk/issue being edited
   const [pmDraftNew, setPmDraftNew] = useState(null); // in-progress new item not yet saved to config
   const [pmShowClosed, setPmShowClosed] = useState(false);
+  const [pmReportProject, setPmReportProject] = useState("");
+  const [pmReportPeriod, setPmReportPeriod] = useState("month"); // week | month | quarter | year
   const todayStr = dateStr(now);
   const [myDay, setMyDay] = useState({ date: todayStr, frog: "", priorities: [] });
   const [priDragIdx, setPriDragIdx] = useState(null);
@@ -8568,7 +8570,7 @@ export default function WorkHoursTracker({ onImport }) {
         <div>
           {/* Report period selector */}
           <div style={{ display: "flex", gap: 3, marginBottom: 16 }}>
-            {[["daily","Daily"],["weekly","Weekly"],["monthly","Monthly"],["annual","Annual"],!isPersonal && ["batch","Batch"],["comparison","Compare"]].filter(Boolean).map(([k, l]) => (
+            {[["daily","Daily"],["weekly","Weekly"],["monthly","Monthly"],["annual","Annual"],!isPersonal && ["batch","Batch"],["comparison","Compare"],!isPersonal && ["pm","PM"]].filter(Boolean).map(([k, l]) => (
               <button key={k} onClick={() => setReportView(k)} style={{
                 fontFamily: "'Inter', 'Roboto', sans-serif", fontSize: 13, fontWeight: 600, padding: "9px 20px",
                 background: reportView === k ? "#1a73e8" : "#ffffff",
@@ -9357,6 +9359,337 @@ export default function WorkHoursTracker({ onImport }) {
                       </tr>
                     </tbody>
                   </table>
+                </div>
+              </div>
+            );
+          })()}
+
+          {reportView === "pm" && !isPersonal && (() => {
+            const projects = activeConfig.projects || [];
+            const projectOptions = projects.map(p => typeof p === "string" ? p : p.name).filter(Boolean);
+            const periodDays = pmReportPeriod === "week" ? 7 : pmReportPeriod === "month" ? 30 : pmReportPeriod === "quarter" ? 90 : 365;
+            const periodLabel = pmReportPeriod === "week" ? "Last 7 days" : pmReportPeriod === "month" ? "Last 30 days" : pmReportPeriod === "quarter" ? "Last 90 days" : "Last 12 months";
+            const now = new Date();
+            const cutoff = new Date(now); cutoff.setDate(cutoff.getDate() - periodDays);
+            const cutoffStr = dateStr(cutoff);
+            const projectFilter = pmReportProject || "";
+            const matchProject = (p) => !projectFilter || p === projectFilter;
+
+            // Hours from time entries in period, filtered by project if set
+            let hoursInPeriod = 0;
+            const hoursByProject = {};
+            Object.entries(allData).forEach(([key, days]) => {
+              const [y, w] = key.split("-W").map(Number);
+              if (!y || !w) return;
+              const mon = getMondayOfWeek(w, y);
+              (days || []).forEach((day, di) => {
+                const d = new Date(mon); d.setDate(d.getDate() + di);
+                if (d < cutoff || d > now) return;
+                (day || []).forEach(ent => {
+                  const s = parseTime(ent.start), e = parseTime(ent.end);
+                  if (s === null || e === null) return;
+                  const hrs = Math.max(0, e - s);
+                  const p = ent.project || "(No project)";
+                  if (!matchProject(ent.project || "")) return;
+                  hoursInPeriod += hrs;
+                  hoursByProject[p] = (hoursByProject[p] || 0) + hrs;
+                });
+              });
+            });
+
+            // Tasks
+            const filteredTasks = tasks.filter(t => matchProject(t.project || ""));
+            const openTasks = filteredTasks.filter(t => t.status !== "completed" && t.status !== "cancelled");
+            const completedInPeriod = filteredTasks.filter(t => t.status === "completed" && t.completedDate && t.completedDate >= cutoffStr);
+            const overdueTasks = openTasks.filter(t => t.dueDate && t.dueDate < dateStr(now));
+
+            // PM log items by type, respecting project filter
+            const logsByType = {};
+            Object.keys(PM_TYPES).forEach(k => {
+              const all = (config[k] || []).filter(x => matchProject(x.project || ""));
+              const open = all.filter(x => !PM_TYPES[k].closedStatuses.includes(x.status));
+              const closed = all.filter(x => PM_TYPES[k].closedStatuses.includes(x.status));
+              logsByType[k] = { all, open, closed };
+            });
+
+            const totalOpen = Object.values(logsByType).reduce((s, x) => s + x.open.length, 0);
+
+            // Risk heatmap: 3x3 of open risks
+            const riskMatrix = {
+              "High-High": 0, "High-Med": 0, "High-Low": 0,
+              "Med-High": 0, "Med-Med": 0, "Med-Low": 0,
+              "Low-High": 0, "Low-Med": 0, "Low-Low": 0,
+            };
+            logsByType.risks.open.forEach(r => {
+              const k = `${r.likelihood}-${r.impact}`;
+              if (k in riskMatrix) riskMatrix[k]++;
+            });
+            const matrixColor = (l, i) => {
+              const sev = ({ "High-High": "Critical", "High-Med": "High", "Med-High": "High", "High-Low": "Med", "Low-High": "Med", "Med-Med": "Med", "Med-Low": "Low", "Low-Med": "Low", "Low-Low": "Low" })[`${l}-${i}`];
+              return ({ Critical: "#fad2cf", High: "#fce8e6", Med: "#fef7e0", Low: "#e6f4ea" })[sev] || "#f1f3f4";
+            };
+
+            // Top open risks
+            const sevOrder = { Critical: 0, High: 1, Med: 2, Low: 3 };
+            const computeSev = (l, i) => ({ "High-High": "Critical", "High-Med": "High", "Med-High": "High", "High-Low": "Med", "Low-High": "Med", "Med-Med": "Med", "Med-Low": "Low", "Low-Med": "Low", "Low-Low": "Low" })[`${l}-${i}`] || "Low";
+            const topRisks = [...logsByType.risks.open].sort((a, b) => sevOrder[computeSev(a.likelihood, a.impact)] - sevOrder[computeSev(b.likelihood, b.impact)]).slice(0, 5);
+            const topIssues = [...logsByType.issues.open].sort((a, b) => sevOrder[a.priority || "Low"] - sevOrder[b.priority || "Low"]).slice(0, 5);
+
+            // Needs attention
+            const todayStr = dateStr(now);
+            const pastReview = [];
+            const noOwner = [];
+            const aged = [];
+            Object.entries(logsByType).forEach(([k, d]) => {
+              const cfg = PM_TYPES[k];
+              d.open.forEach(item => {
+                const followupVal = item[cfg.followupField];
+                if (followupVal && followupVal < todayStr) pastReview.push({ type: k, item, field: cfg.followupLabel, value: followupVal });
+                if (!item.owner) noOwner.push({ type: k, item });
+                if (item.dateRaised && item.dateRaised < cutoffStr) aged.push({ type: k, item });
+              });
+            });
+
+            // Recent closed (decisions & issues closed in period)
+            const recentDecisions = (config.decisions || []).filter(d => matchProject(d.project || "") && d.status === "Decided" && d.dateDecided && d.dateDecided >= cutoffStr).sort((a, b) => (b.dateDecided || "").localeCompare(a.dateDecided || "")).slice(0, 5);
+            const recentResolved = (config.issues || []).filter(i => matchProject(i.project || "") && i.status === "Resolved" && i.dateResolved && i.dateResolved >= cutoffStr).sort((a, b) => (b.dateResolved || "").localeCompare(a.dateResolved || "")).slice(0, 5);
+
+            const topProjectHours = Object.entries(hoursByProject).sort((a, b) => b[1] - a[1]).slice(0, 8);
+            const maxProjectHrs = Math.max(...topProjectHours.map(x => x[1]), 1);
+
+            const card = (title, body, bg = "#fff", border = "#e8eaed") => (
+              <div style={{ background: darkMode ? "#1a1a2e" : bg, border: `1px solid ${darkMode ? "#2a2a4a" : border}`, borderRadius: 12, padding: "14px 18px", boxShadow: "0 1px 3px rgba(0,0,0,0.04)" }}>
+                <div style={{ fontSize: 12, fontWeight: 600, color: "#5f6368", textTransform: "uppercase", letterSpacing: "0.5px", marginBottom: 8 }}>{title}</div>
+                {body}
+              </div>
+            );
+            const bigNum = (n, sub, color) => (
+              <div>
+                <div style={{ fontSize: 28, fontWeight: 700, color: color || (darkMode ? "#e0e0e0" : "#202124") }}>{n}</div>
+                {sub && <div style={{ fontSize: 12, color: "#5f6368" }}>{sub}</div>}
+              </div>
+            );
+
+            return (
+              <div>
+                {/* Filters */}
+                <div style={{ display: "flex", gap: 10, marginBottom: 20, flexWrap: "wrap", alignItems: "center" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                    <span style={{ fontSize: 12, color: "#5f6368" }}>Project</span>
+                    <select value={projectFilter} onChange={e => setPmReportProject(e.target.value)} style={{ fontSize: 13, padding: "6px 12px", borderRadius: 8, border: `1px solid ${darkMode ? "#2a2a4a" : "#dadce0"}`, background: darkMode ? "#1a1a2e" : "#fff", color: darkMode ? "#e0e0e0" : "#202124" }}>
+                      <option value="">All projects</option>
+                      {projectOptions.map(p => <option key={p} value={p}>{p}</option>)}
+                    </select>
+                  </div>
+                  <div style={{ display: "flex", gap: 3 }}>
+                    {[["week", "7d"], ["month", "30d"], ["quarter", "90d"], ["year", "1y"]].map(([k, l]) => (
+                      <button key={k} onClick={() => setPmReportPeriod(k)} style={{
+                        fontSize: 12, fontWeight: 600, padding: "6px 12px",
+                        background: pmReportPeriod === k ? "#1a73e8" : "transparent",
+                        color: pmReportPeriod === k ? "#fff" : "#5f6368",
+                        border: `1px solid ${pmReportPeriod === k ? "#1a73e8" : "#dadce0"}`,
+                        borderRadius: 6, cursor: "pointer",
+                      }}>{l}</button>
+                    ))}
+                  </div>
+                  <span style={{ fontSize: 12, color: "#5f6368" }}>{periodLabel}</span>
+                </div>
+
+                {/* Top-line metrics */}
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 12, marginBottom: 20 }}>
+                  {card("Hours logged", bigNum(hoursInPeriod.toFixed(1), periodLabel.toLowerCase()))}
+                  {card("Tasks open", bigNum(openTasks.length, `${completedInPeriod.length} done in period`, openTasks.length > 0 ? "#1a73e8" : undefined))}
+                  {card("Open risks", bigNum(logsByType.risks.open.length, logsByType.risks.closed.length + " closed", logsByType.risks.open.some(r => computeSev(r.likelihood, r.impact) === "Critical" || computeSev(r.likelihood, r.impact) === "High") ? "#d93025" : undefined))}
+                  {card("Open issues", bigNum(logsByType.issues.open.length, logsByType.issues.closed.length + " closed", logsByType.issues.open.some(i => i.priority === "Critical" || i.priority === "High") ? "#d93025" : undefined))}
+                  {card("Blockers", bigNum(logsByType.dependencies.open.filter(d => d.status === "Blocked").length + logsByType.questions.open.length, "blocked deps + open questions", "#e37400"))}
+                  {card("Decisions", bigNum(recentDecisions.length, "made in period"))}
+                </div>
+
+                {/* PM log counts by type */}
+                <div style={{ background: darkMode ? "#1a1a2e" : "#fff", border: `1px solid ${darkMode ? "#2a2a4a" : "#e8eaed"}`, borderRadius: 12, padding: "16px 20px", marginBottom: 20 }}>
+                  <div style={{ fontSize: 14, fontWeight: 700, color: darkMode ? "#e0e0e0" : "#202124", marginBottom: 12 }}>PM logs</div>
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(120px, 1fr))", gap: 10 }}>
+                    {Object.entries(PM_TYPES).map(([k, cfg]) => {
+                      const d = logsByType[k];
+                      return (
+                        <div key={k} style={{ padding: "10px 12px", background: darkMode ? "#0f0f1e" : "#f8f9fa", borderRadius: 8, textAlign: "center" }}>
+                          <div style={{ fontSize: 20, marginBottom: 4 }}>{cfg.icon}</div>
+                          <div style={{ fontSize: 20, fontWeight: 700, color: d.open.length > 0 ? (darkMode ? "#e0e0e0" : "#202124") : "#80868b" }}>{d.open.length}</div>
+                          <div style={{ fontSize: 11, color: "#5f6368" }}>{cfg.label} open</div>
+                          {d.closed.length > 0 && <div style={{ fontSize: 10, color: "#80868b", marginTop: 2 }}>{d.closed.length} closed</div>}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Two-column: Risk matrix + Hours by project */}
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: 12, marginBottom: 20 }}>
+                  <div style={{ background: darkMode ? "#1a1a2e" : "#fff", border: `1px solid ${darkMode ? "#2a2a4a" : "#e8eaed"}`, borderRadius: 12, padding: "16px 20px" }}>
+                    <div style={{ fontSize: 14, fontWeight: 700, color: darkMode ? "#e0e0e0" : "#202124", marginBottom: 12 }}>⚠️ Risk matrix</div>
+                    {logsByType.risks.open.length === 0 ? (
+                      <div style={{ fontSize: 13, color: "#80868b", textAlign: "center", padding: "20px 0" }}>No open risks</div>
+                    ) : (
+                      <div>
+                        <div style={{ display: "grid", gridTemplateColumns: "60px repeat(3, 1fr)", gap: 4, fontSize: 11, color: "#5f6368" }}>
+                          <div></div>
+                          <div style={{ textAlign: "center", fontWeight: 600 }}>Low<br/><span style={{ fontSize: 10 }}>impact</span></div>
+                          <div style={{ textAlign: "center", fontWeight: 600 }}>Med<br/><span style={{ fontSize: 10 }}>impact</span></div>
+                          <div style={{ textAlign: "center", fontWeight: 600 }}>High<br/><span style={{ fontSize: 10 }}>impact</span></div>
+                          {["High", "Med", "Low"].map(l => (
+                            <React.Fragment key={l}>
+                              <div style={{ fontWeight: 600, textAlign: "right", alignSelf: "center", paddingRight: 6 }}>{l}<br/><span style={{ fontSize: 10 }}>likely</span></div>
+                              {["Low", "Med", "High"].map(i => {
+                                const n = riskMatrix[`${l}-${i}`] || 0;
+                                return (
+                                  <div key={i} style={{
+                                    background: matrixColor(l, i), padding: "16px 0", textAlign: "center",
+                                    borderRadius: 6, fontSize: 20, fontWeight: 700,
+                                    color: n > 0 ? "#202124" : "#bdc1c6",
+                                  }}>{n}</div>
+                                );
+                              })}
+                            </React.Fragment>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                  <div style={{ background: darkMode ? "#1a1a2e" : "#fff", border: `1px solid ${darkMode ? "#2a2a4a" : "#e8eaed"}`, borderRadius: 12, padding: "16px 20px" }}>
+                    <div style={{ fontSize: 14, fontWeight: 700, color: darkMode ? "#e0e0e0" : "#202124", marginBottom: 12 }}>⏱ Hours by project</div>
+                    {topProjectHours.length === 0 ? (
+                      <div style={{ fontSize: 13, color: "#80868b", textAlign: "center", padding: "20px 0" }}>No hours logged in period</div>
+                    ) : (
+                      <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                        {topProjectHours.map(([p, h]) => (
+                          <div key={p} style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                            <div style={{ flex: "0 0 120px", fontSize: 12, color: darkMode ? "#e0e0e0" : "#202124", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{p}</div>
+                            <div style={{ flex: 1, height: 8, background: darkMode ? "#2a2a4a" : "#dadce0", borderRadius: 4, overflow: "hidden" }}>
+                              <div style={{ height: "100%", width: `${(h / maxProjectHrs) * 100}%`, background: "#1a73e8" }} />
+                            </div>
+                            <div style={{ flex: "0 0 50px", fontSize: 12, color: "#5f6368", textAlign: "right" }}>{h.toFixed(1)}h</div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Top risks / issues */}
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: 12, marginBottom: 20 }}>
+                  <div style={{ background: darkMode ? "#1a1a2e" : "#fff", border: `1px solid ${darkMode ? "#2a2a4a" : "#e8eaed"}`, borderRadius: 12, padding: "16px 20px" }}>
+                    <div style={{ fontSize: 14, fontWeight: 700, color: darkMode ? "#e0e0e0" : "#202124", marginBottom: 12 }}>Top open risks</div>
+                    {topRisks.length === 0 ? (
+                      <div style={{ fontSize: 13, color: "#80868b", textAlign: "center", padding: "20px 0" }}>No open risks</div>
+                    ) : topRisks.map(r => {
+                      const sev = computeSev(r.likelihood, r.impact);
+                      const col = ({ Critical: "#9a0000", High: "#d93025", Med: "#e37400", Low: "#137333" })[sev] || "#5f6368";
+                      return (
+                        <div key={r.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 0", borderBottom: `1px solid ${darkMode ? "#2a2a4a" : "#f1f3f4"}` }}>
+                          <span style={{ fontSize: 10, fontWeight: 700, color: "#fff", background: col, padding: "2px 8px", borderRadius: 8, textTransform: "uppercase", flexShrink: 0 }}>{sev}</span>
+                          <span style={{ fontSize: 13, color: darkMode ? "#e0e0e0" : "#202124", flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{r.title || "(Untitled)"}</span>
+                          {r.owner && <span style={{ fontSize: 11, color: "#5f6368" }}>{r.owner}</span>}
+                        </div>
+                      );
+                    })}
+                  </div>
+                  <div style={{ background: darkMode ? "#1a1a2e" : "#fff", border: `1px solid ${darkMode ? "#2a2a4a" : "#e8eaed"}`, borderRadius: 12, padding: "16px 20px" }}>
+                    <div style={{ fontSize: 14, fontWeight: 700, color: darkMode ? "#e0e0e0" : "#202124", marginBottom: 12 }}>Top open issues</div>
+                    {topIssues.length === 0 ? (
+                      <div style={{ fontSize: 13, color: "#80868b", textAlign: "center", padding: "20px 0" }}>No open issues</div>
+                    ) : topIssues.map(i => {
+                      const col = ({ Critical: "#9a0000", High: "#d93025", Med: "#e37400", Low: "#137333" })[i.priority] || "#5f6368";
+                      return (
+                        <div key={i.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 0", borderBottom: `1px solid ${darkMode ? "#2a2a4a" : "#f1f3f4"}` }}>
+                          <span style={{ fontSize: 10, fontWeight: 700, color: "#fff", background: col, padding: "2px 8px", borderRadius: 8, textTransform: "uppercase", flexShrink: 0 }}>{i.priority}</span>
+                          <span style={{ fontSize: 13, color: darkMode ? "#e0e0e0" : "#202124", flex: 1, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{i.title || "(Untitled)"}</span>
+                          <span style={{ fontSize: 11, color: "#5f6368" }}>{i.status}</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Needs attention */}
+                <div style={{ background: darkMode ? "#1a1a2e" : "#fff", border: `1px solid ${darkMode ? "#2a2a4a" : "#e8eaed"}`, borderRadius: 12, padding: "16px 20px", marginBottom: 20 }}>
+                  <div style={{ fontSize: 14, fontWeight: 700, color: darkMode ? "#e0e0e0" : "#202124", marginBottom: 12 }}>🚨 Needs attention</div>
+                  {pastReview.length === 0 && noOwner.length === 0 && overdueTasks.length === 0 && aged.length === 0 && (
+                    <div style={{ fontSize: 13, color: "#80868b", textAlign: "center", padding: "10px 0" }}>Nothing flagged</div>
+                  )}
+                  {pastReview.length > 0 && (
+                    <div style={{ marginBottom: 10 }}>
+                      <div style={{ fontSize: 12, fontWeight: 600, color: "#d93025", marginBottom: 4 }}>⏰ Past {pastReview.length === 1 ? "followup" : "followups"} ({pastReview.length})</div>
+                      {pastReview.slice(0, 5).map(({ type, item, field, value }) => (
+                        <div key={item.id} style={{ fontSize: 12, color: "#5f6368", padding: "3px 0" }}>
+                          <span style={{ marginRight: 6 }}>{PM_TYPES[type].icon}</span>
+                          <strong style={{ color: darkMode ? "#e0e0e0" : "#202124" }}>{item.title || "(Untitled)"}</strong>
+                          <span style={{ marginLeft: 8 }}>{field}: <strong style={{ color: "#d93025" }}>{value}</strong></span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  {overdueTasks.length > 0 && (
+                    <div style={{ marginBottom: 10 }}>
+                      <div style={{ fontSize: 12, fontWeight: 600, color: "#d93025", marginBottom: 4 }}>📋 Overdue tasks ({overdueTasks.length})</div>
+                      {overdueTasks.slice(0, 5).map(t => (
+                        <div key={t.id} style={{ fontSize: 12, color: "#5f6368", padding: "3px 0" }}>
+                          <strong style={{ color: darkMode ? "#e0e0e0" : "#202124" }}>{t.title}</strong>
+                          <span style={{ marginLeft: 8, color: "#d93025" }}>due {t.dueDate}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  {noOwner.length > 0 && (
+                    <div style={{ marginBottom: 10 }}>
+                      <div style={{ fontSize: 12, fontWeight: 600, color: "#e37400", marginBottom: 4 }}>👤 No owner ({noOwner.length})</div>
+                      {noOwner.slice(0, 5).map(({ type, item }) => (
+                        <div key={item.id} style={{ fontSize: 12, color: "#5f6368", padding: "3px 0" }}>
+                          <span style={{ marginRight: 6 }}>{PM_TYPES[type].icon}</span>
+                          <strong style={{ color: darkMode ? "#e0e0e0" : "#202124" }}>{item.title || "(Untitled)"}</strong>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  {aged.length > 0 && (
+                    <div>
+                      <div style={{ fontSize: 12, fontWeight: 600, color: "#e37400", marginBottom: 4 }}>🕰 Stale ({aged.length}, raised before {cutoffStr})</div>
+                      {aged.slice(0, 5).map(({ type, item }) => (
+                        <div key={item.id} style={{ fontSize: 12, color: "#5f6368", padding: "3px 0" }}>
+                          <span style={{ marginRight: 6 }}>{PM_TYPES[type].icon}</span>
+                          <strong style={{ color: darkMode ? "#e0e0e0" : "#202124" }}>{item.title || "(Untitled)"}</strong>
+                          <span style={{ marginLeft: 8 }}>raised {item.dateRaised}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* Recent activity */}
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: 12 }}>
+                  <div style={{ background: darkMode ? "#1a1a2e" : "#fff", border: `1px solid ${darkMode ? "#2a2a4a" : "#e8eaed"}`, borderRadius: 12, padding: "16px 20px" }}>
+                    <div style={{ fontSize: 14, fontWeight: 700, color: darkMode ? "#e0e0e0" : "#202124", marginBottom: 12 }}>🧭 Recent decisions</div>
+                    {recentDecisions.length === 0 ? (
+                      <div style={{ fontSize: 13, color: "#80868b", textAlign: "center", padding: "10px 0" }}>None in period</div>
+                    ) : recentDecisions.map(d => (
+                      <div key={d.id} style={{ padding: "8px 0", borderBottom: `1px solid ${darkMode ? "#2a2a4a" : "#f1f3f4"}` }}>
+                        <div style={{ fontSize: 13, fontWeight: 600, color: darkMode ? "#e0e0e0" : "#202124" }}>{d.title || "(Untitled)"}</div>
+                        {d.outcome && <div style={{ fontSize: 12, color: "#5f6368", marginTop: 2, whiteSpace: "pre-wrap" }}>{d.outcome}</div>}
+                        <div style={{ fontSize: 11, color: "#80868b", marginTop: 4 }}>{d.dateDecided}{d.owner && ` · ${d.owner}`}</div>
+                      </div>
+                    ))}
+                  </div>
+                  <div style={{ background: darkMode ? "#1a1a2e" : "#fff", border: `1px solid ${darkMode ? "#2a2a4a" : "#e8eaed"}`, borderRadius: 12, padding: "16px 20px" }}>
+                    <div style={{ fontSize: 14, fontWeight: 700, color: darkMode ? "#e0e0e0" : "#202124", marginBottom: 12 }}>✅ Recently resolved issues</div>
+                    {recentResolved.length === 0 ? (
+                      <div style={{ fontSize: 13, color: "#80868b", textAlign: "center", padding: "10px 0" }}>None in period</div>
+                    ) : recentResolved.map(i => (
+                      <div key={i.id} style={{ padding: "8px 0", borderBottom: `1px solid ${darkMode ? "#2a2a4a" : "#f1f3f4"}` }}>
+                        <div style={{ fontSize: 13, fontWeight: 600, color: darkMode ? "#e0e0e0" : "#202124" }}>{i.title || "(Untitled)"}</div>
+                        {i.resolution && <div style={{ fontSize: 12, color: "#5f6368", marginTop: 2, whiteSpace: "pre-wrap" }}>{i.resolution}</div>}
+                        <div style={{ fontSize: 11, color: "#80868b", marginTop: 4 }}>{i.dateResolved}{i.owner && ` · ${i.owner}`}</div>
+                      </div>
+                    ))}
+                  </div>
                 </div>
               </div>
             );
