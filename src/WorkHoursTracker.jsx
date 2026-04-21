@@ -1835,8 +1835,8 @@ function PmItemCard({ item, typeConfig, projects, onEdit, computeSeverity, sevCo
           <span>Impact: <strong style={{ color: darkMode ? "#e0e0e0" : "#202124" }}>{item.impact}</strong></span>
         )}
         {item.owner && <span>Owner: <strong style={{ color: darkMode ? "#e0e0e0" : "#202124" }}>{item.owner}</strong></span>}
-        {projectName && <span>Project: <strong style={{ color: darkMode ? "#e0e0e0" : "#202124" }}>{projectName}</strong></span>}
-        {item.workOrder && <span>Work Order: <strong style={{ color: darkMode ? "#e0e0e0" : "#202124" }}>{item.workOrder}</strong></span>}
+        {item.workOrder && <span>Work Order: <strong style={{ color: darkMode ? "#e0e0e0" : "#202124" }}>{item.workOrder}</strong>{projectName && <span style={{ color: "#80868b" }}> · {projectName}</span>}</span>}
+        {!item.workOrder && projectName && <span>Project: <strong style={{ color: darkMode ? "#e0e0e0" : "#202124" }}>{projectName}</strong></span>}
         {item.dateRaised && <span>Raised: <strong style={{ color: darkMode ? "#e0e0e0" : "#202124" }}>{item.dateRaised}</strong></span>}
         {followupVal && <span>{typeConfig.followupDisplay}: <strong style={{ color: darkMode ? "#e0e0e0" : "#202124" }}>{followupVal}</strong></span>}
       </div>
@@ -1850,8 +1850,22 @@ function PmItemEditor({ item, typeConfig, projects, workOrders, onSave, onCancel
   const [draft, setDraft] = useState(item);
   const priority = typeConfig.hasLikelihood ? computeSeverity(draft.likelihood, draft.impact) : (draft.priority || "Med");
   const set = (k, v) => setDraft(prev => ({ ...prev, [k]: v }));
-  const projectOptions = projects.map(p => typeof p === "string" ? p : p.name).filter(Boolean);
   const woOptions = (workOrders || []).map(w => typeof w === "string" ? w : w.name).filter(Boolean);
+  const resolveChain = (woName) => {
+    const wo = (workOrders || []).find(w => (typeof w === "string" ? w : w.name) === woName);
+    const projectName = wo && typeof wo === "object" ? (wo.project || "") : "";
+    let customerName = "";
+    if (projectName) {
+      const proj = projects.find(p => (typeof p === "string" ? p : p.name) === projectName);
+      customerName = proj && typeof proj === "object" ? (proj.customer || "") : "";
+    }
+    return { project: projectName, customer: customerName };
+  };
+  const setWorkOrder = (v) => {
+    const chain = resolveChain(v);
+    setDraft(prev => ({ ...prev, workOrder: v, project: chain.project || "", customer: chain.customer || "" }));
+  };
+  const derivedProject = draft.project || "";
   const levels = ["Low", "Med", "High"];
   const priorities = ["Low", "Med", "High", "Critical"];
   const field = (label, node) => (
@@ -1927,18 +1941,12 @@ function PmItemEditor({ item, typeConfig, projects, workOrders, onSave, onCancel
           <input value={draft.owner} onChange={e => set("owner", e.target.value)} placeholder="Who owns this?" style={inputStyle} />
         </div>
         <div>
-          <label style={labelStyle}>Project</label>
-          <select value={draft.project} onChange={e => set("project", e.target.value)} style={inputStyle}>
-            <option value="">(none)</option>
-            {projectOptions.map(p => <option key={p} value={p}>{p}</option>)}
-          </select>
-        </div>
-        <div>
           <label style={labelStyle}>Work Order</label>
-          <select value={draft.workOrder || ""} onChange={e => set("workOrder", e.target.value)} style={inputStyle}>
+          <select value={draft.workOrder || ""} onChange={e => setWorkOrder(e.target.value)} style={inputStyle}>
             <option value="">(none)</option>
             {woOptions.map(w => <option key={w} value={w}>{w}</option>)}
           </select>
+          {derivedProject && <div style={{ fontSize: 11, color: "#5f6368", marginTop: 4 }}>Project: {derivedProject}</div>}
         </div>
         <div>
           <label style={labelStyle}>Date raised</label>
@@ -2094,7 +2102,6 @@ export default function WorkHoursTracker({ onImport }) {
   const [pmEditingId, setPmEditingId] = useState(null); // id of risk/issue being edited
   const [pmDraftNew, setPmDraftNew] = useState(null); // in-progress new item not yet saved to config
   const [pmShowClosed, setPmShowClosed] = useState(false);
-  const [pmFilterProject, setPmFilterProject] = useState("");
   const [pmFilterWorkOrder, setPmFilterWorkOrder] = useState("");
   const [pmReportProject, setPmReportProject] = useState("");
   const [pmReportPeriod, setPmReportPeriod] = useState("month"); // week | month | quarter | year
@@ -9929,10 +9936,9 @@ export default function WorkHoursTracker({ onImport }) {
         const projects = activeConfig.projects || [];
         const workOrders = activeConfig.workOrders || [];
         const todayStr = dateStr(new Date());
-        const pmDefProject = config.pmDefaultProject || "";
         const pmDefWorkOrder = config.pmDefaultWorkOrder || "";
-        const projectOptions = projects.map(p => typeof p === "string" ? p : p.name).filter(Boolean);
         const woOptions = workOrders.map(w => typeof w === "string" ? w : w.name).filter(Boolean);
+        const pmDefProject = pmDefWorkOrder ? (lookupWorkOrderChain(pmDefWorkOrder).project || "") : "";
 
         // Severity = likelihood × impact (used by risks; reused as colour scale for priority on other types)
         const sevMatrix = {
@@ -9978,7 +9984,6 @@ export default function WorkHoursTracker({ onImport }) {
 
         const isClosed = (item) => typeConfig.closedStatuses.includes(item.status);
         const matchesFilter = (x) => {
-          if (pmFilterProject && (x.project || "") !== pmFilterProject) return false;
           if (pmFilterWorkOrder && (x.workOrder || "") !== pmFilterWorkOrder) return false;
           return true;
         };
@@ -10060,40 +10065,20 @@ export default function WorkHoursTracker({ onImport }) {
               </div>
             </div>
 
-            {/* Filters */}
-            <div style={{ background: darkMode ? "#1a1a2e" : "#f8f9fa", border: `1px solid ${darkMode ? "#2a2a4a" : "#e8eaed"}`, borderRadius: 10, padding: "10px 16px", marginBottom: 10, display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
-              <span style={{ fontSize: 12, fontWeight: 600, color: "#5f6368" }}>Filter:</span>
-              <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-                <label style={{ fontSize: 12, color: "#5f6368" }}>Project</label>
-                <select value={pmFilterProject} onChange={e => setPmFilterProject(e.target.value)} style={{ fontSize: 12, padding: "3px 8px", borderRadius: 6, border: `1px solid ${darkMode ? "#2a2a4a" : "#dadce0"}`, background: darkMode ? "#1a1a2e" : "#fff", color: darkMode ? "#e0e0e0" : "#202124" }}>
-                  <option value="">All</option>
-                  {projectOptions.map(p => <option key={p} value={p}>{p}</option>)}
-                </select>
-              </div>
-              <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-                <label style={{ fontSize: 12, color: "#5f6368" }}>Work Order</label>
+            {/* Filter + default work order */}
+            <div style={{ background: darkMode ? "#1a1a2e" : "#f8f9fa", border: `1px solid ${darkMode ? "#2a2a4a" : "#e8eaed"}`, borderRadius: 10, padding: "10px 16px", marginBottom: 16, display: "flex", gap: 16, alignItems: "center", flexWrap: "wrap" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                <span style={{ fontSize: 12, fontWeight: 600, color: "#5f6368" }}>Filter by work order</span>
                 <select value={pmFilterWorkOrder} onChange={e => setPmFilterWorkOrder(e.target.value)} style={{ fontSize: 12, padding: "3px 8px", borderRadius: 6, border: `1px solid ${darkMode ? "#2a2a4a" : "#dadce0"}`, background: darkMode ? "#1a1a2e" : "#fff", color: darkMode ? "#e0e0e0" : "#202124" }}>
                   <option value="">All</option>
                   {woOptions.map(w => <option key={w} value={w}>{w}</option>)}
                 </select>
+                {pmFilterWorkOrder && (
+                  <button onClick={() => setPmFilterWorkOrder("")} style={{ fontSize: 11, color: "#d93025", background: "transparent", border: "none", cursor: "pointer", fontWeight: 600 }}>Clear</button>
+                )}
               </div>
-              {(pmFilterProject || pmFilterWorkOrder) && (
-                <button onClick={() => { setPmFilterProject(""); setPmFilterWorkOrder(""); }} style={{ fontSize: 11, color: "#d93025", background: "transparent", border: "none", cursor: "pointer", fontWeight: 600 }}>Clear</button>
-              )}
-            </div>
-
-            {/* Defaults for new items */}
-            <div style={{ background: darkMode ? "#1a1a2e" : "#f8f9fa", border: `1px solid ${darkMode ? "#2a2a4a" : "#e8eaed"}`, borderRadius: 10, padding: "10px 16px", marginBottom: 16, display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
-              <span style={{ fontSize: 12, fontWeight: 600, color: "#5f6368" }}>Defaults:</span>
-              <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-                <label style={{ fontSize: 12, color: "#5f6368" }}>Project</label>
-                <select value={pmDefProject} onChange={e => setConfig(prev => ({ ...prev, pmDefaultProject: e.target.value }))} style={{ fontSize: 12, padding: "3px 8px", borderRadius: 6, border: `1px solid ${darkMode ? "#2a2a4a" : "#dadce0"}`, background: darkMode ? "#1a1a2e" : "#fff", color: darkMode ? "#e0e0e0" : "#202124" }}>
-                  <option value="">(none)</option>
-                  {projectOptions.map(p => <option key={p} value={p}>{p}</option>)}
-                </select>
-              </div>
-              <div style={{ display: "flex", alignItems: "center", gap: 4 }}>
-                <label style={{ fontSize: 12, color: "#5f6368" }}>Work Order</label>
+              <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                <span style={{ fontSize: 12, fontWeight: 600, color: "#5f6368" }}>Default for new items</span>
                 <select value={pmDefWorkOrder} onChange={e => setConfig(prev => ({ ...prev, pmDefaultWorkOrder: e.target.value }))} style={{ fontSize: 12, padding: "3px 8px", borderRadius: 6, border: `1px solid ${darkMode ? "#2a2a4a" : "#dadce0"}`, background: darkMode ? "#1a1a2e" : "#fff", color: darkMode ? "#e0e0e0" : "#202124" }}>
                   <option value="">(none)</option>
                   {woOptions.map(w => <option key={w} value={w}>{w}</option>)}
