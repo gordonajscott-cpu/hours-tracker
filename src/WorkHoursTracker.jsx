@@ -4614,7 +4614,11 @@ export default function WorkHoursTracker({ onImport }) {
     const sun = new Date(mon); sun.setDate(sun.getDate() + 6);
     const days = DAYS.map((_, i) => {
       const d = new Date(mon); d.setDate(d.getDate() + i);
-      return { date: d, label: SHORT_DAYS[i], fullLabel: formatDateLong(d), hours: getFilteredHoursForDate(d), entries: getFilteredEntriesForDate(d), holiday: isHoliday(d) };
+      const hol = isHoliday(d);
+      const dow = d.getDay();
+      const isWorkday = dow >= 1 && dow <= 5;
+      const dayContracted = isWorkday && !hol ? dailyHrs : 0;
+      return { date: d, label: SHORT_DAYS[i], fullLabel: formatDateLong(d), hours: getFilteredHoursForDate(d), entries: getFilteredEntriesForDate(d), holiday: hol, contracted: dayContracted };
     });
     const total = days.reduce((s, d) => s + d.hours, 0);
     const holidayCount = countHolidaysInRange(mon, sun);
@@ -4640,13 +4644,21 @@ export default function WorkHoursTracker({ onImport }) {
 
       const wMon = getMondayOfWeek(wn, wy);
       let weekHours = 0;
+      let weekdaysInMonth = 0;
+      let holsInWeek = 0;
       for (let i = 0; i < 7; i++) {
         const dd = new Date(wMon); dd.setDate(dd.getDate() + i);
         if (dd.getMonth() === reportMonth && dd.getFullYear() === reportYear) {
           weekHours += getFilteredHoursForDate(dd);
+          const dow = dd.getDay();
+          if (dow >= 1 && dow <= 5) {
+            weekdaysInMonth++;
+            if (isHoliday(dd)) holsInWeek++;
+          }
         }
       }
-      weeks.push({ weekNum: wn, hours: weekHours, startDate: wMon });
+      const weekContracted = Math.max(0, (weekdaysInMonth - holsInWeek) * dailyHrs);
+      weeks.push({ weekNum: wn, hours: weekHours, startDate: wMon, contracted: weekContracted });
       totalHours += weekHours;
     }
 
@@ -4671,13 +4683,21 @@ export default function WorkHoursTracker({ onImport }) {
 
     for (let m = 0; m < 12; m++) {
       let mHours = 0;
+      let mWeekdays = 0;
+      let mHols = 0;
       const daysInMonth = new Date(reportAnnualYear, m + 1, 0).getDate();
       for (let d = 1; d <= daysInMonth; d++) {
         const date = new Date(reportAnnualYear, m, d);
         if (date > today) break;
         mHours += getFilteredHoursForDate(date);
+        const dow = date.getDay();
+        if (dow >= 1 && dow <= 5) {
+          mWeekdays++;
+          if (isHoliday(date)) mHols++;
+        }
       }
-      months.push({ month: MONTHS[m], hours: mHours });
+      const mContracted = Math.max(0, (mWeekdays - mHols) * dailyHrs);
+      months.push({ month: MONTHS[m], hours: mHours, contracted: mContracted });
       totalHours += mHours;
     }
 
@@ -8649,24 +8669,33 @@ export default function WorkHoursTracker({ onImport }) {
                 return (
                   <div>
                     <div style={{ display: "flex", flexDirection: "column", gap: 6, marginBottom: 18 }}>
-                      {days.map((d, i) => (
-                        <div key={i} style={{
-                          display: "flex", alignItems: "center", gap: 14, padding: "14px 18px",
-                          background: d.date.toDateString() === now.toDateString() ? "#e8f0fe" : "#ffffff",
-                          border: `1px solid ${d.date.toDateString() === now.toDateString() ? "#1a73e8" : "#dadce0"}`, borderRadius: 8
-                        }}>
-                          <div style={{ width: 70 }}>
-                            <div style={{ fontSize: 15, fontWeight: 600, color: d.date.toDateString() === now.toDateString() ? "#1a73e8" : (i >= 5 ? "#80868b" : "#202124") }}>{d.label}</div>
-                            <div style={{ fontSize: 13, color: "#5f6368" }}>{formatDate(d.date)}</div>
-                          </div>
-                          <div style={{ flex: 1, height: 8, background: "#dadce0", borderRadius: 4, overflow: "hidden" }}>
-                            <div style={{ height: "100%", width: `${total > 0 ? (d.hours / total) * 100 : 0}%`, background: d.hours > 0 ? "#1a73e8" : "transparent", borderRadius: 4 }} />
-                          </div>
-                          <div style={{ fontSize: 18, fontWeight: 700, fontFamily: "'Inter', 'Roboto', sans-serif", color: d.hours > 0 ? "#202124" : "#dadce0", width: 70, textAlign: "right" }}>
-                            {d.hours > 0 ? fmtH(d.hours) : "—"}
-                          </div>
-                        </div>
-                      ))}
+                      {(() => {
+                        const maxDay = Math.max(...days.map(x => Math.max(x.hours, x.contracted || 0)), 1);
+                        return days.map((d, i) => {
+                          const dayContracted = d.contracted || 0;
+                          const blueHrs = isPersonal ? d.hours : Math.min(d.hours, dayContracted);
+                          const redHrs = isPersonal ? 0 : Math.max(0, d.hours - dayContracted);
+                          return (
+                            <div key={i} style={{
+                              display: "flex", alignItems: "center", gap: 14, padding: "14px 18px",
+                              background: d.date.toDateString() === now.toDateString() ? "#e8f0fe" : "#ffffff",
+                              border: `1px solid ${d.date.toDateString() === now.toDateString() ? "#1a73e8" : "#dadce0"}`, borderRadius: 8
+                            }}>
+                              <div style={{ width: 70 }}>
+                                <div style={{ fontSize: 15, fontWeight: 600, color: d.date.toDateString() === now.toDateString() ? "#1a73e8" : (i >= 5 ? "#80868b" : "#202124") }}>{d.label}</div>
+                                <div style={{ fontSize: 13, color: "#5f6368" }}>{formatDate(d.date)}</div>
+                              </div>
+                              <div style={{ flex: 1, height: 8, background: "#dadce0", borderRadius: 4, overflow: "hidden", display: "flex" }}>
+                                <div style={{ height: "100%", width: `${(blueHrs / maxDay) * 100}%`, background: "#1a73e8" }} />
+                                <div style={{ height: "100%", width: `${(redHrs / maxDay) * 100}%`, background: "#d93025" }} />
+                              </div>
+                              <div style={{ fontSize: 18, fontWeight: 700, fontFamily: "'Inter', 'Roboto', sans-serif", color: d.hours > 0 ? "#202124" : "#dadce0", width: 70, textAlign: "right" }}>
+                                {d.hours > 0 ? fmtH(d.hours) : "—"}
+                              </div>
+                            </div>
+                          );
+                        });
+                      })()}
                     </div>
                     {isPersonal ? (
                       <div style={{ background: "#ffffff", border: "1px solid #dadce0", borderRadius: 12, padding: "16px 20px", textAlign: "center", boxShadow: "0 1px 3px rgba(0,0,0,0.08)" }}>
@@ -8700,23 +8729,32 @@ export default function WorkHoursTracker({ onImport }) {
                 return (
                   <div>
                     <div style={{ display: "flex", flexDirection: "column", gap: 6, marginBottom: 18 }}>
-                      {weeks.map((w, i) => (
-                        <div key={i} style={{
-                          display: "flex", alignItems: "center", gap: 14, padding: "14px 18px",
-                          background: "#ffffff", border: "1px solid #e8eaed", borderRadius: 12, boxShadow: "0 1px 2px rgba(0,0,0,0.06)"
-                        }}>
-                          <div style={{ width: 80 }}>
-                            <div style={{ fontSize: 15, fontWeight: 600, color: "#202124" }}>Week {w.weekNum}</div>
-                            <div style={{ fontSize: 13, color: "#5f6368" }}>{formatDate(w.startDate)}</div>
-                          </div>
-                          <div style={{ flex: 1, height: 8, background: "#dadce0", borderRadius: 4, overflow: "hidden" }}>
-                            <div style={{ height: "100%", width: `${contracted > 0 ? Math.min(100, (w.hours / contracted) * 100 * weeks.length) : 0}%`, background: w.hours > 0 ? "#1a73e8" : "transparent", borderRadius: 4 }} />
-                          </div>
-                          <div style={{ fontSize: 20, fontWeight: 700, fontFamily: "'Inter', 'Roboto', sans-serif", color: w.hours > 0 ? "#202124" : "#dadce0", width: 80, textAlign: "right" }}>
-                            {w.hours > 0 ? fmtH(w.hours) : "—"}
-                          </div>
-                        </div>
-                      ))}
+                      {(() => {
+                        const maxWeek = Math.max(...weeks.map(x => Math.max(x.hours, x.contracted || 0)), 1);
+                        return weeks.map((w, i) => {
+                          const weekContracted = w.contracted || 0;
+                          const blueHrs = isPersonal ? w.hours : Math.min(w.hours, weekContracted);
+                          const redHrs = isPersonal ? 0 : Math.max(0, w.hours - weekContracted);
+                          return (
+                            <div key={i} style={{
+                              display: "flex", alignItems: "center", gap: 14, padding: "14px 18px",
+                              background: "#ffffff", border: "1px solid #e8eaed", borderRadius: 12, boxShadow: "0 1px 2px rgba(0,0,0,0.06)"
+                            }}>
+                              <div style={{ width: 80 }}>
+                                <div style={{ fontSize: 15, fontWeight: 600, color: "#202124" }}>Week {w.weekNum}</div>
+                                <div style={{ fontSize: 13, color: "#5f6368" }}>{formatDate(w.startDate)}</div>
+                              </div>
+                              <div style={{ flex: 1, height: 8, background: "#dadce0", borderRadius: 4, overflow: "hidden", display: "flex" }}>
+                                <div style={{ height: "100%", width: `${(blueHrs / maxWeek) * 100}%`, background: "#1a73e8" }} />
+                                <div style={{ height: "100%", width: `${(redHrs / maxWeek) * 100}%`, background: "#d93025" }} />
+                              </div>
+                              <div style={{ fontSize: 20, fontWeight: 700, fontFamily: "'Inter', 'Roboto', sans-serif", color: w.hours > 0 ? "#202124" : "#dadce0", width: 80, textAlign: "right" }}>
+                                {w.hours > 0 ? fmtH(w.hours) : "—"}
+                              </div>
+                            </div>
+                          );
+                        });
+                      })()}
                     </div>
                     {isPersonal ? (
                       <div style={{ background: "#ffffff", border: "1px solid #dadce0", borderRadius: 12, padding: "16px 20px", textAlign: "center", boxShadow: "0 1px 3px rgba(0,0,0,0.08)" }}>
@@ -8763,11 +8801,15 @@ export default function WorkHoursTracker({ onImport }) {
               {/* ── ANNUAL ── */}
               {reportView === "annual" && (() => {
                 const { months, totalHours, contracted, overtime, holidayCount } = annualReportData;
-                const maxMonth = Math.max(...months.map(m => m.hours), 1);
+                const maxMonth = Math.max(...months.map(m => Math.max(m.hours, m.contracted || 0)), 1);
                 return (
                   <div>
                     <div style={{ display: "flex", flexDirection: "column", gap: 6, marginBottom: 18 }}>
-                      {months.map((m, i) => (
+                      {months.map((m, i) => {
+                        const monthContracted = m.contracted || 0;
+                        const blueHrs = isPersonal ? m.hours : Math.min(m.hours, monthContracted);
+                        const redHrs = isPersonal ? 0 : Math.max(0, m.hours - monthContracted);
+                        return (
                         <div key={i} style={{
                           display: "flex", alignItems: "center", gap: 14, padding: "12px 18px",
                           background: i === now.getMonth() && reportAnnualYear === now.getFullYear() ? "#e8f0fe" : "#ffffff",
@@ -8777,14 +8819,16 @@ export default function WorkHoursTracker({ onImport }) {
                           <div style={{ width: 90, fontSize: 15, fontWeight: 600, color: i === now.getMonth() && reportAnnualYear === now.getFullYear() ? "#1a73e8" : "#3c4043" }}>
                             {m.month.slice(0, 3)}
                           </div>
-                          <div style={{ flex: 1, height: 8, background: "#dadce0", borderRadius: 4, overflow: "hidden" }}>
-                            <div style={{ height: "100%", width: `${(m.hours / maxMonth) * 100}%`, background: m.hours > 0 ? "#1a73e8" : "transparent", borderRadius: 4 }} />
+                          <div style={{ flex: 1, height: 8, background: "#dadce0", borderRadius: 4, overflow: "hidden", display: "flex" }}>
+                            <div style={{ height: "100%", width: `${(blueHrs / maxMonth) * 100}%`, background: "#1a73e8" }} />
+                            <div style={{ height: "100%", width: `${(redHrs / maxMonth) * 100}%`, background: "#d93025" }} />
                           </div>
                           <div style={{ fontSize: 18, fontWeight: 700, fontFamily: "'Inter', 'Roboto', sans-serif", color: m.hours > 0 ? "#202124" : "#dadce0", width: 80, textAlign: "right" }}>
                             {m.hours > 0 ? fmtH(m.hours) : "—"}
                           </div>
                         </div>
-                      ))}
+                        );
+                      })}
                     </div>
                     {isPersonal ? (
                       <div style={{ background: "#ffffff", border: "1px solid #dadce0", borderRadius: 12, padding: "18px 22px", textAlign: "center", boxShadow: "0 1px 3px rgba(0,0,0,0.08)" }}>
