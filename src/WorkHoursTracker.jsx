@@ -1782,6 +1782,16 @@ const PM_TYPES = {
     emptyMessage: "Log assumptions that might need validation later",
     descPlaceholder: "What you're assuming, and why it's uncertain",
   },
+  lessonsLearned: {
+    label: "Lessons Learned", singular: "Lesson Learned", icon: "📝",
+    statuses: ["Draft", "Published", "Archived"],
+    closedStatuses: ["Archived"],
+    resolutionField: "takeaway", resolutionLabel: "Key takeaway",
+    resolutionPlaceholder: "What should the team remember for next time?",
+    followupField: "dateRecorded", followupLabel: "Date recorded", followupDisplay: "Recorded",
+    emptyMessage: "Capture lessons learned so you don't repeat mistakes",
+    descPlaceholder: "What happened, what went well or poorly, and why",
+  },
 };
 
 const PM_STATUS_COLORS = {
@@ -1790,11 +1800,11 @@ const PM_STATUS_COLORS = {
   // orange (pending action)
   Monitoring: "#e37400", Proposed: "#e37400", Active: "#e37400", Pending: "#e37400",
   // blue (in flight)
-  "In Progress": "#1a73e8",
+  "In Progress": "#1a73e8", Draft: "#1a73e8",
   // green (resolved positive)
-  Resolved: "#137333", Answered: "#137333", Decided: "#137333", Validated: "#137333",
+  Resolved: "#137333", Answered: "#137333", Decided: "#137333", Validated: "#137333", Published: "#137333",
   // gray (closed/neutral)
-  Closed: "#5f6368", Superseded: "#5f6368", Lifted: "#5f6368",
+  Closed: "#5f6368", Superseded: "#5f6368", Lifted: "#5f6368", Archived: "#5f6368",
 };
 
 // Card view for a PM log item — read-only summary with an edit button.
@@ -1982,7 +1992,7 @@ function PmItemEditor({ item, typeConfig, projects, workOrders, onSave, onCancel
 // Baseline shapes used when (re)loading a profile — ensures switching profiles
 // can't leak the previous profile's config through a partial merge.
 function getDefaultConfig() {
-  return { customers: [], projects: [], workOrders: [], activities: [], tags: [], activityTemplates: [], favouriteActivities: [], roles: [], favouriteRoles: [], favouriteTags: [], billRates: [], favouriteBillRates: [], tagCategories: {}, bankHolidayRegion: "", customHolidays: {}, showDailyQuote: true, taskTemplates: [], risks: [], issues: [], questions: [], decisions: [], constraints: [], dependencies: [], assumptions: [] };
+  return { customers: [], projects: [], workOrders: [], activities: [], tags: [], activityTemplates: [], favouriteActivities: [], roles: [], favouriteRoles: [], favouriteTags: [], billRates: [], favouriteBillRates: [], tagCategories: {}, bankHolidayRegion: "", customHolidays: {}, showDailyQuote: true, taskTemplates: [], risks: [], issues: [], questions: [], decisions: [], constraints: [], dependencies: [], assumptions: [], lessonsLearned: [] };
 }
 function getDefaultDefaults() {
   return { customer: "", project: "", workOrder: "", activity: "", role: "", billRate: "", startTime: "09:00", endTime: "17:30", wakeTime: "07:00", workStartTime: "09:00", lunchStartTime: "12:00", lunchEndTime: "13:00", workEndTime: "17:30", bedTime: "22:30", workDays: [0, 1, 2, 3, 4] };
